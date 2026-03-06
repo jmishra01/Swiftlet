@@ -43,14 +43,14 @@ impl AST {
 
 fn inline_print(tree: &AST) -> String {
     match tree {
-        AST::Token(token) => token.word.clone(),
+        AST::Token(token) => format!("\"{}\"", token.word.clone()),
         AST::Tree(name, children) => {
             let c = children
                 .iter()
                 .map(inline_print)
                 .collect::<Vec<String>>()
                 .join(", ");
-            format!("{}([{}])", name, c)
+            format!("Tree(\"{}\", [{}])", name, c)
         }
     }
 }
@@ -137,6 +137,29 @@ impl Pattern {
     }
 }
 
+
+#[derive(Debug, Clone)]
+pub(crate) struct RegexFlag {
+    pub(crate) i: bool, // Case-insensitive
+    pub(crate) m: bool, // Multi-line
+    pub(crate) s: bool, // Dot matches all
+    pub(crate) u: bool, // unicode matching
+    pub(crate) x: bool, // verbose
+}
+
+impl Default for RegexFlag {
+    fn default() -> Self {
+        Self {
+            i: false,
+            m: false,
+            s: false,
+            u: true,
+            x: false,
+        }
+    }
+}
+
+
 #[derive(Debug, Clone)]
 pub struct TerminalDef {
     pub(crate) name: Arc<Symbol>,
@@ -147,32 +170,42 @@ pub struct TerminalDef {
 }
 
 impl TerminalDef {
-    pub fn new(name: &str, value: &str, regex: bool, case_insensitive: bool) -> Self {
+    pub(crate) fn with_string(name: &str, value: &str) -> Self {
         let name = Arc::new(Symbol::Terminal(name.to_string()));
 
+        Self {
+            name,
+            value: value.to_string(),
+            pattern: Pattern::PatternStr(value.to_string()),
+            max_width: value.len(),
+        }
+    }
+
+    pub(crate) fn with_regex(name: &str, value: &str, regex_flag: RegexFlag) -> Self {
+        let name = Arc::new(Symbol::Terminal(name.to_string()));
         let (pattern, max_width) = {
-            if regex {
-                let rb = RegexBuilder::new((r"^".to_string() + value).as_str())
-                    .case_insensitive(case_insensitive)
-                    .build()
-                    .unwrap();
-                let pr = Pattern::PatternRegex(rb);
-                let max = if value.contains("+") || value.contains("*") {
-                    usize::MAX
-                } else {
-                    value.len()
-                };
-                (pr, max)
+            let rb = RegexBuilder::new((r"^".to_string() + value).as_str())
+                .case_insensitive(regex_flag.i)
+                .multi_line(regex_flag.m)
+                .dot_matches_new_line(regex_flag.s)
+                .unicode_mode(regex_flag.u)
+                .verbose_mode(regex_flag.x)
+                .build()
+                .unwrap();
+            let pr = Pattern::PatternRegex(rb);
+            let max = if value.contains("+") || value.contains("*") {
+                usize::MAX
             } else {
-                (Pattern::PatternStr(value.to_string()), value.len())
-            }
+                value.len()
+            };
+            (pr, max)
         };
 
         Self {
             name,
             value: value.to_string(),
             pattern,
-            max_width,
+            max_width
         }
     }
 

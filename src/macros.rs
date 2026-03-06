@@ -1,7 +1,11 @@
 #[macro_export]
 macro_rules! terminal_def {
-    ($x:expr, $y:expr, $z:expr, $w:expr) => {
-        Arc::new(TerminalDef::new($x, $y, $z, $w))
+    ($x:expr, $y:expr) => {
+        Arc::new(TerminalDef::with_string($x, $y))
+    };
+
+    ($x:expr, $y:expr, $r:expr) => {
+        Arc::new(TerminalDef::with_regex($x, $y, $r))
     };
 }
 

@@ -4,7 +4,7 @@ use std::sync::{Arc, LazyLock};
 use crate::builder::GrammarBuilder;
 use crate::common::get_common_terminals;
 use crate::grammar::{create_rules, Algorithm, Rule};
-use crate::lexer::{LexerConf, Symbol, TerminalDef};
+use crate::lexer::{LexerConf, RegexFlag, Symbol, TerminalDef};
 use crate::parser_frontends::ParserConf;
 use crate::parser_frontends::ParserFrontend;
 use crate::transform::Transformer;
@@ -24,38 +24,38 @@ pub(crate) static GRAMMAR_BUILDER: LazyLock<GrammarBuilder> = LazyLock::new(|| {
     GrammarBuilder::new(PARSER.clone(), tp_conf)
 });
 
-const _RE_FLAGS: &str = "imslux";
+const _RE_FLAGS: &str = "imsux";
 
 pub fn get_terminals() -> Vec<Arc<TerminalDef>> {
     let _regex: String = format!(r"/(?!/)(\\/|\\\\|[^/])*?/[{_RE_FLAGS}]*");
     let terminals = vec![
-        terminal_def!("_COLON", ":", false, false),
-        terminal_def!("_OR", r"|", false, false),
-        terminal_def!("_DOT", r"\.(?!\.)", true, false),
-        terminal_def!("_DOT_DOT", r"..", false, false),
-        terminal_def!("RULE", r"(_|\?)?[a-z][_a-z0-9]*", true, false),
-        terminal_def!("TERMINAL", "_?[A-Z][_A-Z0-9]*", true, false),
-        terminal_def!("STRING", r#""(\\"|\\|[^"\n])*?"i?"#, true, false),
-        terminal_def!("REGEXP", _regex.as_str(), true, false),
-        terminal_def!("_NL_OR", r"(\r?\n)+\s*\|", true, false),
-        terminal_def!("_NL", r"(\r?\n)+\s*", true, false),
-        terminal_def!("WS", r"[ \t]+", true, false),
-        terminal_def!("BACKSLASH", r"\\[ ]*\n", true, false),
-        terminal_def!("_TO", "->", false, false),
-        terminal_def!("_IGNORE", r"%ignore", false, false),
-        terminal_def!("_IMPORT", r"%import", false, false),
-        terminal_def!("NUMBER", r"[+-]?\d+",true, false),
-        terminal_def!("TILDE", "~", true, false),
-        terminal_def!("_COMMA", ",", true, false),
-        terminal_def!("_COLON", ":", false, false),
-        terminal_def!("_OR", r"|", false, false),
-        terminal_def!("_LPAR", "(", false, false),
-        terminal_def!("_RPAR", ")", false, false),
-        terminal_def!("_LBAR", "[", false, false),
-        terminal_def!("_RBAR", "]", false, false),
-        terminal_def!("_LBRACE", "{", false, false),
-        terminal_def!("_RBRACE", "}", false, false),
-        terminal_def!("OP", r"[+*]|[?](?![a-z_])", true, false),
+        terminal_def!("_COLON", ":"),
+        terminal_def!("_OR", r"|"),
+        terminal_def!("_DOT", r"\.(?!\.)", RegexFlag::default()),
+        terminal_def!("_DOT_DOT", r".."),
+        terminal_def!("RULE", r"(_|\?)?[a-z][_a-z0-9]*", RegexFlag::default()),
+        terminal_def!("TERMINAL", "_?[A-Z][_A-Z0-9]*", RegexFlag::default()),
+        terminal_def!("STRING", r#""(\\"|\\|[^"\n])*?"i?"#, RegexFlag::default()),
+        terminal_def!("REGEXP", _regex.as_str(), RegexFlag::default()),
+        terminal_def!("_NL_OR", r"(\r?\n)+\s*\|", RegexFlag::default()),
+        terminal_def!("_NL", r"(\r?\n)+\s*", RegexFlag::default()),
+        terminal_def!("WS", r"[ \t]+", RegexFlag::default()),
+        terminal_def!("BACKSLASH", r"\\[ ]*\n", RegexFlag::default()),
+        terminal_def!("_TO", "->"),
+        terminal_def!("_IGNORE", r"%ignore"),
+        terminal_def!("_IMPORT", r"%import"),
+        terminal_def!("NUMBER", r"[+-]?\d+", RegexFlag::default()),
+        terminal_def!("TILDE", "~", RegexFlag::default()),
+        terminal_def!("_COMMA", ",", RegexFlag::default()),
+        terminal_def!("_COLON", ":"),
+        terminal_def!("_OR", r"|"),
+        terminal_def!("_LPAR", "("),
+        terminal_def!("_RPAR", ")"),
+        terminal_def!("_LBAR", "["),
+        terminal_def!("_RBAR", "]"),
+        terminal_def!("_LBRACE", "{"),
+        terminal_def!("_RBRACE", "}"),
+        terminal_def!("OP", r"[+*]|[?](?![a-z_])", RegexFlag::default()),
     ];
     terminals
 }
@@ -189,7 +189,7 @@ mod tests {
         start: T
         T: "expr"
         "#,
-        r#"start([rule([non_terminal([start]), or_expansion([terminal([T])])]), term([terminal([T]), or_expansion([string(["expr"])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", ["start"]), Tree("or_expansion", [Tree("terminal", ["T"])])]), Tree("term", [Tree("terminal", ["T"]), Tree("or_expansion", [Tree("string", [""expr""])])])])"#
     );
 
     make_test_case!(
@@ -198,7 +198,7 @@ mod tests {
         start: T
         T: "ex\"pr"
         "#,
-        r#"start([rule([non_terminal([start]), or_expansion([terminal([T])])]), term([terminal([T]), or_expansion([string(["ex\"pr"])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", ["start"]), Tree("or_expansion", [Tree("terminal", ["T"])])]), Tree("term", [Tree("terminal", ["T"]), Tree("or_expansion", [Tree("string", [""ex\"pr""])])])])"#
     );
 
     make_test_case!(
@@ -209,7 +209,7 @@ mod tests {
         %import WS
         %ignore WS
         "#,
-        r#"start([rule([non_terminal([start]), or_expansion([terminal([T])])]), term([terminal([T]), or_expansion([string(["a"])])]), import([terminal([WS])]), ignore([or_expansion([terminal([WS])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", ["start"]), Tree("or_expansion", [Tree("terminal", ["T"])])]), Tree("term", [Tree("terminal", ["T"]), Tree("or_expansion", [Tree("string", [""a""])])]), Tree("import", [Tree("terminal", ["WS"])]), Tree("ignore", [Tree("or_expansion", [Tree("terminal", ["WS"])])])])"#
     );
 
     make_test_case!(
@@ -221,7 +221,7 @@ mod tests {
         t: t "a"
             | "b"
         "#,
-        r#"start([rule([non_terminal([s]), or_expansion([non_terminal([e])])]), rule([non_terminal([e]), or_expansion([or_expansion([expansion([non_terminal([e]), non_terminal([t])])]), non_terminal([t])])]), rule([non_terminal([t]), or_expansion([or_expansion([expansion([non_terminal([t]), string(["a"])])]), string(["b"])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", ["s"]), Tree("or_expansion", [Tree("non_terminal", ["e"])])]), Tree("rule", [Tree("non_terminal", ["e"]), Tree("or_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", ["e"]), Tree("non_terminal", ["t"])])]), Tree("non_terminal", ["t"])])]), Tree("rule", [Tree("non_terminal", ["t"]), Tree("or_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", ["t"]), Tree("string", [""a""])])]), Tree("string", [""b""])])])])"#
     );
 
     make_test_case!(
@@ -231,7 +231,7 @@ mod tests {
         ?e: t
         t: "hello"
         "#,
-        r#"start([rule([non_terminal([s]), or_expansion([non_terminal([e])])]), rule([non_terminal([?e]), or_expansion([non_terminal([t])])]), rule([non_terminal([t]), or_expansion([string(["hello"])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", ["s"]), Tree("or_expansion", [Tree("non_terminal", ["e"])])]), Tree("rule", [Tree("non_terminal", ["?e"]), Tree("or_expansion", [Tree("non_terminal", ["t"])])]), Tree("rule", [Tree("non_terminal", ["t"]), Tree("or_expansion", [Tree("string", [""hello""])])])])"#
     );
 
     make_test_case!(
@@ -241,7 +241,7 @@ mod tests {
         e: e "+" t
         t: "0".."9"
         "#,
-        r#"start([rule([non_terminal([s]), or_expansion([non_terminal([e])])]), rule([non_terminal([e]), or_expansion([expansion([non_terminal([e]), string(["+"]), non_terminal([t])])])]), rule([non_terminal([t]), or_expansion([range(["0", "9"])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", ["s"]), Tree("or_expansion", [Tree("non_terminal", ["e"])])]), Tree("rule", [Tree("non_terminal", ["e"]), Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", ["e"]), Tree("string", [""+""]), Tree("non_terminal", ["t"])])])]), Tree("rule", [Tree("non_terminal", ["t"]), Tree("or_expansion", [Tree("range", [""0"", ""9""])])])])"#
     );
 
     make_test_case!(
@@ -251,7 +251,7 @@ mod tests {
         e: e "+" t -> add
         t: "0".."9"
         "#,
-        r#"start([rule([non_terminal([s]), or_expansion([non_terminal([e])])]), rule([non_terminal([e]), or_expansion([alias([non_terminal([e]), string(["+"]), non_terminal([t]), non_terminal([add])])])]), rule([non_terminal([t]), or_expansion([range(["0", "9"])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", ["s"]), Tree("or_expansion", [Tree("non_terminal", ["e"])])]), Tree("rule", [Tree("non_terminal", ["e"]), Tree("or_expansion", [Tree("alias", [Tree("non_terminal", ["e"]), Tree("string", [""+""]), Tree("non_terminal", ["t"]), Tree("non_terminal", ["add"])])])]), Tree("rule", [Tree("non_terminal", ["t"]), Tree("or_expansion", [Tree("range", [""0"", ""9""])])])])"#
     );
 
     make_test_case!(
@@ -263,7 +263,7 @@ mod tests {
             | t
         t: "0".."9"
         "#,
-        r#"start([rule([non_terminal([s]), or_expansion([non_terminal([e])])]), rule([non_terminal([e]), or_expansion([or_expansion([or_expansion([alias([non_terminal([e]), string(["+"]), non_terminal([t]), non_terminal([add])])]), alias([non_terminal([e]), string(["-"]), non_terminal([t]), non_terminal([sub])])]), non_terminal([t])])]), rule([non_terminal([t]), or_expansion([range(["0", "9"])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", ["s"]), Tree("or_expansion", [Tree("non_terminal", ["e"])])]), Tree("rule", [Tree("non_terminal", ["e"]), Tree("or_expansion", [Tree("or_expansion", [Tree("or_expansion", [Tree("alias", [Tree("non_terminal", ["e"]), Tree("string", [""+""]), Tree("non_terminal", ["t"]), Tree("non_terminal", ["add"])])]), Tree("alias", [Tree("non_terminal", ["e"]), Tree("string", [""-""]), Tree("non_terminal", ["t"]), Tree("non_terminal", ["sub"])])]), Tree("non_terminal", ["t"])])]), Tree("rule", [Tree("non_terminal", ["t"]), Tree("or_expansion", [Tree("range", [""0"", ""9""])])])])"#
     );
 
 
@@ -274,7 +274,7 @@ mod tests {
         e: (e ("+" | "-"))? t
         t: "0".."9"
         "#,
-        r#"start([rule([non_terminal([s]), or_expansion([non_terminal([e])])]), rule([non_terminal([e]), or_expansion([expansion([op_expansion([or_expansion([expansion([non_terminal([e]), or_expansion([or_expansion([string(["+"])]), string(["-"])])])]), ?]), non_terminal([t])])])]), rule([non_terminal([t]), or_expansion([range(["0", "9"])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", ["s"]), Tree("or_expansion", [Tree("non_terminal", ["e"])])]), Tree("rule", [Tree("non_terminal", ["e"]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", ["e"]), Tree("or_expansion", [Tree("or_expansion", [Tree("string", [""+""])]), Tree("string", [""-""])])])]), "?"]), Tree("non_terminal", ["t"])])])]), Tree("rule", [Tree("non_terminal", ["t"]), Tree("or_expansion", [Tree("range", [""0"", ""9""])])])])"#
     );
 
 
@@ -287,7 +287,7 @@ mod tests {
         %import (WS, INT)
         %ignore WS
         "#,
-        r#"start([rule([non_terminal([s]), or_expansion([non_terminal([e])])]), rule([non_terminal([e]), or_expansion([expansion([op_expansion([or_expansion([expansion([non_terminal([e]), or_expansion([or_expansion([string(["+"])]), string(["-"])])])]), ?]), non_terminal([t])])])]), rule([non_terminal([t]), or_expansion([terminal([INT])])]), import([name_list([name_list([terminal([WS])]), terminal([INT])])]), ignore([or_expansion([terminal([WS])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", ["s"]), Tree("or_expansion", [Tree("non_terminal", ["e"])])]), Tree("rule", [Tree("non_terminal", ["e"]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", ["e"]), Tree("or_expansion", [Tree("or_expansion", [Tree("string", [""+""])]), Tree("string", [""-""])])])]), "?"]), Tree("non_terminal", ["t"])])])]), Tree("rule", [Tree("non_terminal", ["t"]), Tree("or_expansion", [Tree("terminal", ["INT"])])]), Tree("import", [Tree("name_list", [Tree("name_list", [Tree("terminal", ["WS"])]), Tree("terminal", ["INT"])])]), Tree("ignore", [Tree("or_expansion", [Tree("terminal", ["WS"])])])])"#
     );
 
 
@@ -302,6 +302,6 @@ mod tests {
         %import (WS, INT)
         %ignore WS
         "#,
-        r#"start([rule([non_terminal([s]), or_expansion([non_terminal([e])])]), rule([non_terminal([e]), or_expansion([expansion([op_expansion([or_expansion([expansion([non_terminal([e]), or_expansion([or_expansion([string(["+"])]), string(["-"])])])]), ?]), non_terminal([t])])])]), rule([non_terminal([t]), or_expansion([expansion([op_expansion([or_expansion([expansion([non_terminal([t]), or_expansion([or_expansion([string(["*"])]), string(["\"])])])]), ?]), non_terminal([d])])])]), rule([non_terminal([d]), or_expansion([or_expansion([expansion([string(["("]), non_terminal([e]), string([")"])])]), non_terminal([v])])]), rule([non_terminal([v]), or_expansion([terminal([INT])])]), import([name_list([name_list([terminal([WS])]), terminal([INT])])]), ignore([or_expansion([terminal([WS])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", ["s"]), Tree("or_expansion", [Tree("non_terminal", ["e"])])]), Tree("rule", [Tree("non_terminal", ["e"]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", ["e"]), Tree("or_expansion", [Tree("or_expansion", [Tree("string", [""+""])]), Tree("string", [""-""])])])]), "?"]), Tree("non_terminal", ["t"])])])]), Tree("rule", [Tree("non_terminal", ["t"]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", ["t"]), Tree("or_expansion", [Tree("or_expansion", [Tree("string", [""*""])]), Tree("string", [""\""])])])]), "?"]), Tree("non_terminal", ["d"])])])]), Tree("rule", [Tree("non_terminal", ["d"]), Tree("or_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("string", [""(""]), Tree("non_terminal", ["e"]), Tree("string", ["")""])])]), Tree("non_terminal", ["v"])])]), Tree("rule", [Tree("non_terminal", ["v"]), Tree("or_expansion", [Tree("terminal", ["INT"])])]), Tree("import", [Tree("name_list", [Tree("name_list", [Tree("terminal", ["WS"])]), Tree("terminal", ["INT"])])]), Tree("ignore", [Tree("or_expansion", [Tree("terminal", ["WS"])])])])"#
     );
 }

@@ -1,8 +1,9 @@
 use crate::grammar::{Rule, RuleOption};
-use crate::lexer::{get_symbol, Symbol, TerminalDef, AST};
+use crate::lexer::{get_symbol, RegexFlag, Symbol, TerminalDef, AST};
 use crate::{terminal_def, terms};
 use std::collections::HashMap;
 use std::sync::Arc;
+use fancy_regex::Regex;
 
 pub type OVecStr = Option<Vec<String>>;
 
@@ -238,8 +239,7 @@ impl Transformer {
             self.terminal.push(terminal_def!(
                 rule_name.unwrap().first().unwrap(),
                 prod.first().unwrap(),
-                true,
-                false
+                RegexFlag::default()
             ));
         }
 
@@ -275,8 +275,13 @@ impl Transformer {
         let word = if is_case_insensitive { word.strip_suffix("\"i")? } else { word.strip_suffix("\"")? };
         let terminal_name = format!("__STR__{}__1", word.to_uppercase());
 
-        self.terminal
-            .push(terminal_def!(terminal_name.as_str(), word, is_case_insensitive, is_case_insensitive));
+        if is_case_insensitive {
+            self.terminal
+                .push(terminal_def!(terminal_name.as_str(), word, RegexFlag {i: is_case_insensitive, ..Default::default()}));
+        } else {
+            self.terminal
+                .push(terminal_def!(terminal_name.as_str(), word));
+        }
 
         Some(vec![terminal_name])
     }
@@ -382,11 +387,27 @@ impl Transformer {
         let node = tree.last().unwrap();
         let rule = self.transform(node).unwrap();
         let mut pattern = rule.first().unwrap().as_str();
-        pattern = pattern.strip_prefix("/")?.strip_suffix("/")?;
+        pattern = pattern.strip_prefix("/")?;
+
+        let regex_flag_match = Regex::new(r"/[imsux]*$").unwrap();
+
+        let captures = regex_flag_match.captures(pattern).unwrap().unwrap();
+
+        let capture = captures.get(1).unwrap().as_str();
+
+        pattern = pattern.strip_suffix(capture)?;
+
+        let regex_flag = RegexFlag {
+            i: capture.contains('i'),
+            m: capture.contains('m'),
+            s: capture.contains('s'),
+            u: capture.contains('u'),
+            x: capture.contains('x'),
+            };
 
         let terminal_name = format!("__PATTERN__{}__1", pattern.to_uppercase());
 
-        self.terminal.push(terminal_def!(terminal_name.as_str(), pattern, true, false));
+        self.terminal.push(terminal_def!(terminal_name.as_str(), pattern, regex_flag));
 
         Some(vec![terminal_name])
     }

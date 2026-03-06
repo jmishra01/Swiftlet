@@ -1,3 +1,5 @@
+//! Barat — a context-free grammar parser inspired by Python's Lark.
+//!
 mod builder;
 mod common;
 pub mod grammar;
@@ -16,20 +18,13 @@ use crate::parser::error::ParserError;
 use std::sync::Arc;
 
 
-#[derive(Debug, Clone)]
-pub enum Source {
-    Text,
-    File,
-}
-
-
 /// Ambiguity Enum
-///  used to decide how to handle ambiguity in the parse. Relevant to Earley algorithm
+/// used to decide how to handle ambiguity in the parse. Relevant to Earley algorithm
 #[derive(Clone, Debug)]
 pub enum Ambiguity {
     /// Resolve - return first derivation.
     Resolve,
-    /// Explicit - return all derivation under _ambiguity tree node
+    /// Explicit - return all derivation under '_ambiguity' tree node
     Explicit,
 }
 

@@ -2,8 +2,6 @@ use barat::grammar::Algorithm;
 use barat::{Barat, ParserOption};
 use std::sync::Arc;
 
-// TODO: Conflict occur sometime, check the flow
-
 fn main() {
     let text = r#"
         e: t

@@ -1,4 +1,4 @@
-use crate::lexer::TerminalDef;
+use crate::lexer::{RegexFlag, TerminalDef};
 use crate::terminal_def;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -26,47 +26,47 @@ pub(crate) fn get_common_terminals() -> HashMap<String, Arc<TerminalDef>> {
     let quote_pattern = "'.*?'";
 
     HashMap::from([
-        ("WS".to_string(), terminal_def!("WS", ws, true, false)),
-        ("DIGIT".to_string(), terminal_def!("DIGIT", digit, true, false)),
-        ("HEXDIGIT".to_string(), terminal_def!("HEXDIGIT", hex_digit, true, false)),
-        ("INT".to_string(), terminal_def!("INT", integer, true, false)),
-        ("N_INT".to_string(), terminal_def!("N_INT", negative, true, false)),
+        ("WS".to_string(), terminal_def!("WS", ws, RegexFlag::default())),
+        ("DIGIT".to_string(), terminal_def!("DIGIT", digit, RegexFlag::default())),
+        ("HEXDIGIT".to_string(), terminal_def!("HEXDIGIT", hex_digit, RegexFlag::default())),
+        ("INT".to_string(), terminal_def!("INT", integer, RegexFlag::default())),
+        ("N_INT".to_string(), terminal_def!("N_INT", negative, RegexFlag::default())),
         (
             "SIGNED_INT".to_string(),
-            terminal_def!("SIGNED_INT", signed_integer, true, false),
+            terminal_def!("SIGNED_INT", signed_integer, RegexFlag::default()),
         ),
         (
             "DECIMAL".to_string(),
-            terminal_def!("DECIMAL", decimal, true, false),
+            terminal_def!("DECIMAL", decimal, RegexFlag::default()),
         ),
         (
             "LCASE_LETTER".to_string(),
-            terminal_def!("LCASE_LETTER", lower_case_letter, true, false),
+            terminal_def!("LCASE_LETTER", lower_case_letter, RegexFlag::default()),
         ),
         (
             "UCASE_LETTER".to_string(),
-            terminal_def!("UCASE_LETTER", upper_case_letter, true, false),
+            terminal_def!("UCASE_LETTER", upper_case_letter, RegexFlag::default()),
         ),
-        ("WORD".to_string(), terminal_def!("WORD", word.as_str(), true, false)),
-        ("CNAME".to_string(), terminal_def!("CNAME", cname, true, false)),
+        ("WORD".to_string(), terminal_def!("WORD", word.as_str(), RegexFlag::default())),
+        ("CNAME".to_string(), terminal_def!("CNAME", cname, RegexFlag::default())),
         (
             "WS_INLINE".to_string(),
-            terminal_def!("WS_INLINE", ws_inline, true, false),
+            terminal_def!("WS_INLINE", ws_inline, RegexFlag::default()),
         ),
-        ("CR".to_string(), terminal_def!("CR", cr, true, false)),
-        ("LF".to_string(), terminal_def!("LF", lf, true, false)),
-        ("NEWLINE".to_string(), terminal_def!("NEWLINE", newline, true, false)),
+        ("CR".to_string(), terminal_def!("CR", cr, RegexFlag::default())),
+        ("LF".to_string(), terminal_def!("LF", lf, RegexFlag::default())),
+        ("NEWLINE".to_string(), terminal_def!("NEWLINE", newline, RegexFlag::default())),
         (
             "SH_COMMENT".to_string(),
-            terminal_def!("SH_COMMENT", sh_comment, true, false),
+            terminal_def!("SH_COMMENT", sh_comment, RegexFlag::default()),
         ),
         (
             "STRING".to_string(),
-            terminal_def!("STRING", string_pattern, true, false),
+            terminal_def!("STRING", string_pattern, RegexFlag::default()),
         ),
         (
             "QUOTE".to_string(),
-            terminal_def!("QUOTE", quote_pattern, true, false),
+            terminal_def!("QUOTE", quote_pattern, RegexFlag::default()),
         ),
     ])
 }
