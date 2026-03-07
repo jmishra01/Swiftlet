@@ -1,6 +1,6 @@
 [package]
 name = "barat"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Barat is a high-performance text-parsing library for Rust, inspired by Python’s Lark."
 license = "MIT"
