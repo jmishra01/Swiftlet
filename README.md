@@ -1,6 +1,6 @@
 # Barat - Text parsing library
 
-Barat is a high-performance text parsing library inspired by Python’s [Lark](https://lark-parser.readthedocs.io/en/stable/index.html).
+Barat is a high-performance text-parsing library for Rust, inspired by Python’s [Lark](https://lark-parser.readthedocs.io/en/stable/index.html).
 
 It accepts a context-free grammar (CFG) as input and generates an efficient parser capable 
 of analyzing and validating any text that conforms to the specified grammar.
