@@ -7,7 +7,7 @@ license = "MIT"
 repository = "https://github.com/jmishra01/barat"
 documentation = "https://docs.rs/barat"
 keywords = ["parsing", "EARLEY", "CLR", "tokenizer", "AST"]
-categories = ["parser", "parser-implementations"]
+categories = ["parser-implementations", "algorithms", "compilers", "parsing"]
 readme = "README.md"
 
 [dependencies]
