@@ -1,18 +1,19 @@
 use crate::grammar::Rule;
 use std::sync::Arc;
 
+/// Returns `(origin, before_dot, after_dot)` for visualizing parser item state.
 pub fn dot_state(rule: &Arc<Rule>, dot: usize) -> (String, String, String) {
-    let origin = rule.origin.get_value();
+    let origin = rule.origin.as_ref().as_str().to_string();
 
     let mut before_dot = "".to_string();
     let mut after_dot = "".to_string();
 
     for (index, prod) in rule.expansion.iter().enumerate() {
         if index < dot {
-            before_dot = format!("{} {}", before_dot, prod.get_value());
+            before_dot = format!("{} {}", before_dot, prod.as_ref().as_str());
         }
         if index >= dot {
-            after_dot = format!("{} {}", after_dot, prod.get_value());
+            after_dot = format!("{} {}", after_dot, prod.as_ref().as_str());
         }
     }
 

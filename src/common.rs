@@ -3,6 +3,7 @@ use crate::terminal_def;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Returns built-in terminal definitions available through `%import`.
 pub(crate) fn get_common_terminals() -> HashMap<String, Arc<TerminalDef>> {
     let digit = r"\d";
     let hex_digit = r"[a-fA-F0-9]+";

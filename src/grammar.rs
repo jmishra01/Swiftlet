@@ -17,14 +17,17 @@ pub(crate) struct RuleOption {
 }
 
 impl RuleOption {
+    /// Creates rule metadata with expand flag and precedence priority.
     pub(crate) fn new(expand: bool, priority: usize) -> Self {
         Self { expand, priority }
     }
 
+    /// Returns whether this rule should be expanded (flattened) in tree building.
     pub(crate) fn is_expand(&self) -> bool {
         self.expand
     }
 
+    /// Returns rule priority used for conflict resolution.
     pub(crate) fn priority(&self) -> usize {
         self.priority
     }
@@ -40,6 +43,7 @@ pub struct Rule {
 }
 
 impl Rule {
+    /// Creates a grammar rule with a cached expansion length.
     pub(crate) fn new(
         origin: Arc<Symbol>,
         expansion: Vec<Arc<Symbol>>,
@@ -56,28 +60,34 @@ impl Rule {
         }
     }
 
+    /// Returns whether this rule should be expanded in the resulting AST.
     pub fn is_expand(&self) -> bool {
         self.rule_option.expand
     }
 
+    /// Returns the expansion length.
     pub(crate) const fn len(&self) -> usize {
         self.expansion_len
     }
 }
 
 impl Debug for Rule {
+    /// Formats rule as `origin -> expansion...`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let lhs = self.origin.get_value();
+        let lhs = self.origin.as_ref().as_str();
         let rhs = self
             .expansion
             .iter()
-            .map(|x| x.get_value())
+            .map(|x| x.as_ref().as_str().to_string())
             .collect::<Vec<_>>();
 
         write!(f, "{} -> {}", lhs, rhs.join(" "))
     }
 }
 
+/// Builds a rule map from `(origin, expansions)` tuples.
+///
+/// Rule names prefixed with `?` are marked as expandable.
 pub fn create_rules<S, T>(arr: T) -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>>
 where
     S: AsRef<str>,
@@ -111,4 +121,50 @@ where
             )
         }));
     rules
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rule_option_new_and_accessors_work() {
+        let opts = RuleOption::new(true, 7);
+        assert!(opts.is_expand());
+        assert_eq!(opts.priority(), 7);
+    }
+
+    #[test]
+    fn rule_new_len_debug_and_expand_work() {
+        let rule = Rule::new(
+            Arc::new(Symbol::NonTerminal("start".to_string())),
+            vec![
+                Arc::new(Symbol::NonTerminal("expr".to_string())),
+                Arc::new(Symbol::Terminal("INT".to_string())),
+            ],
+            Arc::new(RuleOption::new(false, 0)),
+            1,
+        );
+
+        assert_eq!(rule.len(), 2);
+        assert!(!rule.is_expand());
+        assert_eq!(format!("{rule:?}"), "start -> expr INT");
+    }
+
+    #[test]
+    fn create_rules_builds_non_terminals_and_expansions() {
+        let rules = create_rules([
+            ("start", vec!["expr"]),
+            ("?expr", vec!["INT", "expr PLUS INT"]),
+        ]);
+
+        let start = Arc::new(Symbol::NonTerminal("start".to_string()));
+        let expr = Arc::new(Symbol::NonTerminal("expr".to_string()));
+
+        assert!(rules.contains_key(&start));
+        assert!(rules.contains_key(&expr));
+        assert_eq!(rules[&start].len(), 1);
+        assert_eq!(rules[&expr].len(), 2);
+        assert!(rules[&expr][0].is_expand());
+    }
 }

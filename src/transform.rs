@@ -7,6 +7,7 @@ use fancy_regex::Regex;
 
 pub type OVecStr = Option<Vec<String>>;
 
+/// Normalizes origin symbol and derives rule options from name and priority.
 fn origin_apply(name: &str, priority: usize) -> (String, Arc<RuleOption>) {
     let is_expand = name.starts_with("?");
     let rule_option = Arc::new(RuleOption::new(is_expand, priority));
@@ -29,6 +30,7 @@ pub struct Transformer {
 }
 
 impl Transformer {
+    /// Creates an empty transformer with shared built-in terminals.
     pub fn new(common_terminals: HashMap<String, Arc<TerminalDef>>) -> Self {
         Self {
             terminal: Vec::new(),
@@ -40,12 +42,13 @@ impl Transformer {
         }
     }
 
+    /// Returns transformed grammar and validates non-terminal references.
     pub fn get_grammar(&self) -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
         for v in self.rules.values() {
             for r in v.iter() {
                 for e in r.expansion.iter() {
                     if !e.is_terminal() && !self.rules.contains_key(e) {
-                        panic!("\"{}\" not defined in the given grammar", e.get_value());
+                        panic!("\"{}\" not defined in the given grammar", e.as_ref().as_str());
                     }
                 }
             }
@@ -54,20 +57,24 @@ impl Transformer {
         self.rules.clone()
     }
 
+    /// Sorts terminals by descending max width for longest-match behavior.
     pub(crate) fn sort_terminals(&mut self) {
         self.terminal.sort_by(|a, b| b.max_width.cmp(&a.max_width));
     }
 
+    /// Returns generated terminals.
     pub fn get_terminal(&self) -> Vec<Arc<TerminalDef>> {
         self.terminal.clone()
     }
+    /// Returns collected ignore directives.
     pub fn get_ignores(&self) -> Vec<String> {
         self.ignores.clone()
     }
 
-    #[cfg(feature = "debug")]
+    /// Prints transformed grammar rules.
     pub fn print_grammar(&self) {
-        println!("Grammar");
+        println!("\nGrammar");
+        println!("=======");
         for (_, prod) in self.rules.iter() {
             for p in prod.iter() {
                 println!("{p:?}");
@@ -75,20 +82,23 @@ impl Transformer {
         }
     }
 
-    #[cfg(feature = "debug")]
+    /// Prints transformed terminals.
     pub fn print_terminals(&self) {
-        println!("Terminals");
+        println!("\nTerminals");
+        println!("=========");
         for t in self.terminal.iter() {
             println!("{t:?}");
         }
     }
 
     #[inline]
+    /// Transforms a terminal or non-terminal leaf node.
     fn terminal_non_terminal(&mut self, tree: &[AST]) -> OVecStr {
         self.transform(&tree[0])
     }
 
     #[inline]
+    /// Expands concatenated expressions into full production combinations.
     fn expansions(&mut self, tree: &[AST]) -> OVecStr {
         if tree.len() == 1 {
             let ret = self.transform(&tree[0]);
@@ -112,6 +122,7 @@ impl Transformer {
     }
 
     #[inline]
+    /// Transforms OR alternatives and memoizes generated helper rules.
     fn or_expansion(&mut self, tree: &[AST]) -> OVecStr {
         if tree.len() == 1 {
             return self.transform(tree.first().unwrap());
@@ -137,6 +148,7 @@ impl Transformer {
     }
 
     #[inline]
+    /// Expands postfix operators (`?`, `+`, `*`) into helper productions.
     fn op_expansion(&mut self, tree: &[AST]) -> OVecStr {
         let second = self.transform(&tree[1]).unwrap()[0].clone();
 
@@ -148,7 +160,7 @@ impl Transformer {
             if let Some(r) = self
                 .terminal
                 .iter()
-                .find(|&x| x.get_name().get_value().cmp(&v_result).is_eq())
+                .find(|&x| x.get_name().as_ref().as_str() == v_result.as_str())
             {
                 return Some(vec![format!("{}{}", r.value, second).trim().to_string()]);
             }
@@ -179,6 +191,7 @@ impl Transformer {
         }
     }
 
+    /// Inserts a new production list into the rule map.
     fn insert_rules(&mut self, rule_name: &str, prod: Vec<String>, priority: usize) {
         let (clean_name, rule_option) = origin_apply(rule_name, priority);
 
@@ -200,6 +213,7 @@ impl Transformer {
     }
 
     #[inline]
+    /// Transforms a rule declaration node.
     fn rule(&mut self, tree: &[AST]) -> OVecStr {
         let rule_name = self.transform(&tree[0]).unwrap();
         let prod = self.transform(tree.last().unwrap()).unwrap();
@@ -217,6 +231,7 @@ impl Transformer {
     }
 
     #[inline]
+    /// Transforms a terminal declaration node.
     fn term(&mut self, tree: &[AST]) -> OVecStr {
         let first = tree[0].clone();
         let second = tree[1].clone();
@@ -247,6 +262,7 @@ impl Transformer {
     }
 
     #[inline]
+    /// Transforms a string range node into a character class regex.
     fn range(&mut self, tree: &[AST]) -> OVecStr {
         let first = self.transform(&tree[0]).unwrap();
         let second = self.transform(&tree[1]).unwrap();
@@ -268,6 +284,7 @@ impl Transformer {
     }
 
     #[inline]
+    /// Transforms a string literal into a synthetic terminal.
     fn string(&mut self, tree: &[AST]) -> OVecStr {
         let word = self.transform(&tree[0]).unwrap();
         let word = word[0].strip_prefix("\"")?;
@@ -287,6 +304,7 @@ impl Transformer {
     }
 
     #[inline]
+    /// Processes root start node in two passes: terminals first, then rules.
     fn start(&mut self, tree: &[AST]) -> OVecStr {
         for node in tree.iter() {
             if let Some(name) = node.get_tree_name()
@@ -305,6 +323,7 @@ impl Transformer {
     }
 
     #[inline]
+    /// Collects ignore terminal names from ignore directives.
     fn ignore(&mut self, tree: &[AST]) -> OVecStr {
         for node in tree.iter() {
             if let Some(v) = self.transform(node) {
@@ -317,6 +336,7 @@ impl Transformer {
     }
 
     #[inline]
+    /// Transforms parenthesized expressions into a helper rule.
     fn pars(&mut self, tree: &[AST]) -> OVecStr {
         let mut v_result: Vec<String> = Vec::new();
         let mut name = "_".to_string();
@@ -335,6 +355,7 @@ impl Transformer {
     }
 
     #[inline]
+    /// Transforms optional expression into `(expr | empty)`.
     fn maybe(&mut self, tree: &[AST]) -> OVecStr {
         let v_result = tree
             .iter()
@@ -347,6 +368,7 @@ impl Transformer {
         Some(vec![v_result, "".to_string()])
     }
 
+    /// Imports requested common terminals into the current grammar.
     fn import(&mut self, tree: &[AST]) -> OVecStr {
         for x in tree.iter() {
             if let Some(words) = self.transform(x) {
@@ -361,10 +383,12 @@ impl Transformer {
         None
     }
 
+    /// Returns parsed priority token.
     fn priority(&mut self, tree: &[AST]) -> OVecStr {
         self.transform(&tree[0])
     }
 
+    /// Transforms alias production and injects alias rule.
     fn alias(&mut self, tree: &[AST]) -> OVecStr {
         let last_node = tree.last().unwrap();
         let rule = self.transform(last_node).unwrap();
@@ -383,6 +407,7 @@ impl Transformer {
         Some(rule)
     }
 
+    /// Transforms regex literal node into a synthetic regex terminal.
     fn regex(&mut self, tree: &[AST]) -> OVecStr {
         let node = tree.last().unwrap();
         let rule = self.transform(node).unwrap();
@@ -390,13 +415,8 @@ impl Transformer {
         pattern = pattern.strip_prefix("/")?;
 
         let regex_flag_match = Regex::new(r"/[imsux]*$").unwrap();
-
         let captures = regex_flag_match.captures(pattern).unwrap().unwrap();
-
-        let capture = captures.get(1).unwrap().as_str();
-
-        pattern = pattern.strip_suffix(capture)?;
-
+        let capture = captures.get(0).unwrap().as_str();
         let regex_flag = RegexFlag {
             i: capture.contains('i'),
             m: capture.contains('m'),
@@ -405,6 +425,8 @@ impl Transformer {
             x: capture.contains('x'),
             };
 
+        pattern = pattern.strip_suffix(capture)?;
+
         let terminal_name = format!("__PATTERN__{}__1", pattern.to_uppercase());
 
         self.terminal.push(terminal_def!(terminal_name.as_str(), pattern, regex_flag));
@@ -412,6 +434,7 @@ impl Transformer {
         Some(vec![terminal_name])
     }
 
+    /// Dispatches AST transformation by node type.
     pub fn transform(&mut self, ast: &AST) -> OVecStr {
         match ast {
             AST::Token(token) => Some(vec![token.word.clone()]),

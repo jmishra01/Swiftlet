@@ -12,7 +12,7 @@ fn main() {
         %ignore WS
         "#.to_string();
 
-    let conf = Arc::new(ParserOption { algorithm: Algorithm::CLR, ..Default::default() });
+    let conf = Arc::new(ParserOption { algorithm: Algorithm::CLR, debug: false, ..Default::default() });
 
     let mut text_parser = Barat::from_string(text, conf);
 

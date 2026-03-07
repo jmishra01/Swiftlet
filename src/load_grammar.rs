@@ -26,6 +26,7 @@ pub(crate) static GRAMMAR_BUILDER: LazyLock<GrammarBuilder> = LazyLock::new(|| {
 
 const _RE_FLAGS: &str = "imsux";
 
+/// Returns terminal definitions used by the grammar-language parser.
 pub fn get_terminals() -> Vec<Arc<TerminalDef>> {
     let _regex: String = format!(r"/(?!/)(\\/|\\\\|[^/])*?/[{_RE_FLAGS}]*");
     let terminals = vec![
@@ -60,6 +61,7 @@ pub fn get_terminals() -> Vec<Arc<TerminalDef>> {
     terminals
 }
 
+/// Returns grammar-language production rules.
 pub fn get_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
     create_rules([
         ("start", vec!["_list"]),
@@ -115,6 +117,7 @@ pub fn get_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
     ])
 }
 
+/// Creates the parser frontend used for parsing grammar definitions.
 pub fn get_parser() -> Arc<ParserFrontend> {
     let parser_conf = Arc::new(ParserConf::new(
         RULES.clone(),
@@ -127,7 +130,10 @@ pub fn get_parser() -> Arc<ParserFrontend> {
     Arc::new(ParserFrontend::new(lexer_conf, parser_conf))
 }
 
-pub fn load_grammar(grammar: String) -> Arc<ParserFrontend> {
+/// Parses grammar text and transforms it into a runnable parser frontend.
+///
+/// Panics if grammar parsing or transformation fails.
+pub fn load_grammar(grammar: String, parser_option: Arc<ParserOption>) -> Arc<ParserFrontend> {
     let tree = GRAMMAR_BUILDER.parse(grammar.as_str());
 
     if tree.is_err() {
@@ -136,23 +142,21 @@ pub fn load_grammar(grammar: String) -> Arc<ParserFrontend> {
 
     let tree = tree.unwrap();
 
-    #[cfg(feature = "debug")]
-    {
-        println!("{}", "-".repeat(50));
-        println!("{}AST of Grammar", " ".repeat(18));
-        println!("{}", "-".repeat(50));
+    if parser_option.debug {
+        println!("\nAST of Grammar");
+        println!("==============");
         tree.pretty_print();
-        println!("{}", "-".repeat(50));
+        println!();
     }
 
     let mut transformer = Transformer::new(get_common_terminals());
+
     transformer.transform(&tree);
     transformer.sort_terminals();
 
     let rules = transformer.get_grammar();
 
-    #[cfg(feature = "debug")]
-    {
+    if parser_option.debug {
         transformer.print_terminals();
         transformer.print_grammar();
     }

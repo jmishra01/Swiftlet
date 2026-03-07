@@ -1,5 +1,6 @@
 // use regex::Regex;
 use fancy_regex::{Regex, RegexBuilder};
+use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
@@ -11,6 +12,7 @@ pub enum AST {
 }
 
 impl AST {
+    /// Returns the tree node name for `AST::Tree`, otherwise `None`.
     pub fn get_tree_name(&self) -> Option<&String> {
         match self {
             AST::Tree(name, _) => Some(name),
@@ -18,29 +20,34 @@ impl AST {
         }
     }
 
+    /// Checks whether this AST node should be flattened by underscore naming rules.
     pub fn is_start_with_underscore(&self) -> bool {
         match self {
             AST::Token(token) => {
-                token.terminal.get_value().starts_with("_")
-                    && !token.terminal.get_value().starts_with("__")
+                token.terminal.as_ref().as_str().starts_with("_")
+                    && !token.terminal.as_ref().as_str().starts_with("__")
             }
             AST::Tree(name, _) => name.starts_with("_") && !name.starts_with("__"),
         }
     }
 
+    /// Prints a multi-line pretty representation of the AST.
     pub fn pretty_print(&self) {
         pretty_print(self, "".to_string());
     }
 
+    /// Prints a single-line AST representation.
     pub fn print(&self) {
         println!("{}", self.get_text());
     }
 
+    /// Returns a single-line AST representation.
     pub fn get_text(&self) -> String {
         inline_print(self)
     }
 }
 
+/// Converts AST to a compact single-line textual form.
 fn inline_print(tree: &AST) -> String {
     match tree {
         AST::Token(token) => format!("\"{}\"", token.word.clone()),
@@ -55,6 +62,7 @@ fn inline_print(tree: &AST) -> String {
     }
 }
 
+/// Recursively pretty-prints an AST with indentation padding.
 fn pretty_print(tree: &AST, space: String) {
     match tree {
         AST::Token(name) => println!("{}{:?}", space, name.word),
@@ -76,6 +84,15 @@ pub enum Symbol {
 }
 
 impl Symbol {
+    /// Returns the underlying symbol text as a borrowed string slice.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Symbol::Terminal(value) => value.as_str(),
+            Symbol::NonTerminal(value) => value.as_str(),
+        }
+    }
+
+    /// Returns the underlying symbol text as an owned string.
     pub fn get_value(&self) -> String {
         match self {
             Symbol::Terminal(value) => value.clone(),
@@ -84,10 +101,12 @@ impl Symbol {
     }
 
     #[inline(always)]
+    /// Returns `true` when this symbol is terminal.
     pub fn is_terminal(&self) -> bool {
         matches!(self, Symbol::Terminal(_))
     }
 
+    /// Returns whether the symbol text starts with `prefix`.
     pub fn starts_with(&self, prefix: &str) -> bool {
         match self {
             Symbol::Terminal(value) => value.starts_with(prefix),
@@ -97,6 +116,7 @@ impl Symbol {
 }
 
 impl Debug for Symbol {
+    /// Formats symbol as `Terminal(name)` or `NonTerminal(name)`.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -116,6 +136,7 @@ pub(crate) enum Pattern {
 }
 
 impl Pattern {
+    /// Attempts to capture a token match at the beginning of `text`.
     pub(crate) fn capture(&self, text: &str) -> Option<(String, usize, usize)> {
         match self {
             Pattern::PatternStr(name) => {
@@ -148,6 +169,7 @@ pub(crate) struct RegexFlag {
 }
 
 impl Default for RegexFlag {
+    /// Returns default regex flags used for terminal definitions.
     fn default() -> Self {
         Self {
             i: false,
@@ -170,6 +192,7 @@ pub struct TerminalDef {
 }
 
 impl TerminalDef {
+    /// Creates a literal-string terminal definition.
     pub(crate) fn with_string(name: &str, value: &str) -> Self {
         let name = Arc::new(Symbol::Terminal(name.to_string()));
 
@@ -181,6 +204,7 @@ impl TerminalDef {
         }
     }
 
+    /// Creates a regex-based terminal definition using the provided flags.
     pub(crate) fn with_regex(name: &str, value: &str, regex_flag: RegexFlag) -> Self {
         let name = Arc::new(Symbol::Terminal(name.to_string()));
         let (pattern, max_width) = {
@@ -209,16 +233,19 @@ impl TerminalDef {
         }
     }
 
+    /// Returns terminal symbol name.
     pub fn get_name(&self) -> Arc<Symbol> {
         self.name.clone()
     }
 
+    /// Attempts to match this terminal at the beginning of `text`.
     fn capture(&self, text: &str) -> Option<(String, usize, usize)> {
         self.pattern.capture(text)
     }
 }
 
 impl PartialEq for TerminalDef {
+    /// Compares terminal definitions by name and source pattern text.
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && self.value == other.value
     }
@@ -226,8 +253,9 @@ impl PartialEq for TerminalDef {
 
 #[cfg(feature = "debug")]
 impl Display for TerminalDef {
+    /// Formats terminal as `name -> pattern` for debug logs.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} -> {:?}", self.name.get_value(), self.pattern)
+        write!(f, "{} -> {:?}", self.name.as_ref().as_str(), self.pattern)
     }
 }
 
@@ -242,6 +270,7 @@ pub struct Token {
 }
 
 impl Token {
+    /// Creates a token with source position metadata.
     pub fn new(word: String, start: usize, end: usize, line: usize, terminal: Arc<Symbol>) -> Self {
         Self {
             word,
@@ -260,10 +289,11 @@ pub struct Tokenizer {
     line: usize,
     len: usize,
     terminals: Vec<Arc<TerminalDef>>,
-    ignore: Vec<String>,
+    ignore: HashSet<Arc<Symbol>>,
 }
 
 impl Tokenizer {
+    /// Creates a tokenizer from input text, terminal definitions, and ignored terminal names.
     pub(crate) fn new(text: &str, terminals: &[Arc<TerminalDef>], ignore: &[String]) -> Self {
         Self {
             text: text.to_string(),
@@ -271,10 +301,14 @@ impl Tokenizer {
             line: 0usize,
             len: text.len(),
             terminals: terminals.to_owned(),
-            ignore: ignore.to_vec(),
+            ignore: ignore
+                .iter()
+                .map(|name| Arc::new(Symbol::Terminal(name.clone())))
+                .collect(),
         }
     }
 
+    /// Returns the original tokenizer input text.
     pub(crate) fn get_text(&self) -> &str {
         &self.text
     }
@@ -283,6 +317,9 @@ impl Tokenizer {
 impl Iterator for Tokenizer {
     type Item = Arc<Token>;
 
+    /// Produces the next token matched at the current cursor.
+    ///
+    /// Panics when no terminal matches the current input position.
     fn next(&mut self) -> Option<Self::Item> {
         if self.start < self.len {
             let slice_text = &self.text[self.start..];
@@ -291,7 +328,7 @@ impl Iterator for Tokenizer {
 
             for terminal in self.terminals.iter() {
                 if let Some((mt_word, mt_end, mt_len)) = terminal.capture(slice_text) {
-                    return if !self.ignore.contains(&terminal.name.get_value()) {
+                    return if !self.ignore.contains(&terminal.name) {
                         let token = Arc::new(Token::new(
                             mt_word,
                             self.start,
@@ -300,7 +337,7 @@ impl Iterator for Tokenizer {
                             terminal.name.clone(),
                         ));
 
-                        if terminal.name.get_value() == "_NL" {
+                        if terminal.name.as_ref().as_str() == "_NL" {
                             self.line += 1;
                             if self.start == 0 {
                                 self.start += mt_end;
@@ -322,7 +359,7 @@ impl Iterator for Tokenizer {
                     .terminals
                     .iter()
                     .map(|x| match x.pattern.clone() {
-                        Pattern::PatternRegex(_) => x.get_name().get_value(),
+                        Pattern::PatternRegex(_) => x.get_name().as_ref().as_str().to_string(),
                         Pattern::PatternStr(name) => name,
                     })
                     .collect::<Vec<String>>()
@@ -344,18 +381,126 @@ pub(crate) struct LexerConf {
 }
 
 impl LexerConf {
+    /// Creates lexer configuration from terminal definitions.
     pub fn new(terminals: Vec<Arc<TerminalDef>>) -> Self {
         Self { terminals }
     }
 
+    /// Creates a tokenizer over `text` with a provided ignore list.
     pub fn tokenize(&self, text: &str, ignore: &[String]) -> Tokenizer {
         Tokenizer::new(text, &self.terminals, ignore)
     }
 }
 
+/// Infers whether a symbol name is terminal or non-terminal from casing.
 pub fn get_symbol(word: &str) -> Arc<Symbol> {
     if word.chars().any(|x| x.is_ascii_lowercase()) {
         return Arc::new(Symbol::NonTerminal(word.to_string()));
     }
     Arc::new(Symbol::Terminal(word.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ast_helpers_work_for_tree_and_token() {
+        let tok = Arc::new(Token::new(
+            "hello".to_string(),
+            0,
+            5,
+            0,
+            Arc::new(Symbol::Terminal("_WS".to_string())),
+        ));
+        let ast_tok = AST::Token(tok);
+        let ast_tree = AST::Tree("node".to_string(), vec![ast_tok.clone()]);
+
+        assert_eq!(ast_tree.get_tree_name(), Some(&"node".to_string()));
+        assert!(ast_tok.is_start_with_underscore());
+        assert!(!ast_tree.is_start_with_underscore());
+        assert!(ast_tree.get_text().starts_with("Tree(\"node\""));
+    }
+
+    #[test]
+    fn symbol_helpers_work() {
+        let t = Symbol::Terminal("INT".to_string());
+        let nt = Symbol::NonTerminal("expr".to_string());
+        assert_eq!(t.as_str(), "INT");
+        assert_eq!(nt.get_value(), "expr".to_string());
+        assert!(t.is_terminal());
+        assert!(!nt.is_terminal());
+        assert!(nt.starts_with("ex"));
+    }
+
+    #[test]
+    fn regex_flag_default_is_expected() {
+        let f = RegexFlag::default();
+        assert!(!f.i);
+        assert!(!f.m);
+        assert!(!f.s);
+        assert!(f.u);
+        assert!(!f.x);
+    }
+
+    #[test]
+    fn terminal_def_with_string_and_regex_capture() {
+        let st = TerminalDef::with_string("PLUS", "+");
+        let rg = TerminalDef::with_regex("INT", r"\d+", RegexFlag::default());
+
+        assert_eq!(st.get_name().as_ref().as_str(), "PLUS");
+        assert_eq!(st.capture("+1").unwrap().0, "+".to_string());
+        assert_eq!(rg.capture("123abc").unwrap().0, "123".to_string());
+    }
+
+    #[test]
+    fn token_new_sets_fields() {
+        let tk = Token::new(
+            "abc".to_string(),
+            1,
+            4,
+            2,
+            Arc::new(Symbol::Terminal("ID".to_string())),
+        );
+        assert_eq!(tk.word, "abc");
+        assert_eq!(tk.start, 1);
+        assert_eq!(tk.end, 4);
+        assert_eq!(tk.line, 2);
+    }
+
+    #[test]
+    fn tokenizer_and_lexer_conf_tokenize_with_ignore() {
+        let terminals = vec![
+            Arc::new(TerminalDef::with_regex("_NL", r"\n+", RegexFlag::default())),
+            Arc::new(TerminalDef::with_regex("WS", r"[ ]+", RegexFlag::default())),
+            Arc::new(TerminalDef::with_regex("INT", r"\d+", RegexFlag::default())),
+        ];
+
+        let lexer = LexerConf::new(terminals);
+        let mut tokenizer = lexer.tokenize("12 34\n56", &["WS".to_string(), "_NL".to_string()]);
+        let words = tokenizer.by_ref().map(|x| x.word.clone()).collect::<Vec<_>>();
+
+        assert_eq!(words, vec!["12".to_string(), "34".to_string(), "56".to_string()]);
+        assert_eq!(tokenizer.get_text(), "12 34\n56");
+    }
+
+    #[test]
+    fn tokenizer_panics_on_unmatched_input() {
+        let terminals = vec![Arc::new(TerminalDef::with_string("A", "a"))];
+        let mut tokenizer = Tokenizer::new("x", &terminals, &[]);
+        let panicked = std::panic::catch_unwind(move || {
+            let _ = tokenizer.next();
+        });
+        assert!(panicked.is_err());
+    }
+
+    #[test]
+    fn get_symbol_classifies_terminal_vs_non_terminal() {
+        let nt = get_symbol("expr");
+        let t = get_symbol("INT");
+        assert_eq!(nt.as_ref().as_str(), "expr");
+        assert_eq!(t.as_ref().as_str(), "INT");
+        assert!(!nt.is_terminal());
+        assert!(t.is_terminal());
+    }
 }

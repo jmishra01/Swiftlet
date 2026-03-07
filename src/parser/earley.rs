@@ -5,7 +5,7 @@ use crate::parser::utils::dot_state;
 use crate::parser::Parser;
 use crate::parser_frontends::ParserFrontend;
 use crate::{non_terms, Ambiguity, ParserOption};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::iter::Iterator;
@@ -21,6 +21,7 @@ pub struct State {
 }
 
 impl Hash for State {
+    /// Hashes state identity fields used for chart deduplication.
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.rule.hash(state);
         self.dot.hash(state);
@@ -30,6 +31,7 @@ impl Hash for State {
 }
 
 impl State {
+    /// Creates an Earley state.
     pub fn new(rule: Arc<Rule>, dot: usize, start: usize, end: usize, children: Vec<AST>) -> Self {
         Self {
             rule,
@@ -40,10 +42,12 @@ impl State {
         }
     }
 
+    /// Returns whether the state has consumed the full rule expansion.
     pub fn is_complete(&self) -> bool {
         self.dot == self.rule.len()
     }
 
+    /// Returns the next expected symbol, if any.
     pub fn next_symbol(&self) -> Option<Arc<Symbol>> {
         if self.dot < self.rule.len() {
             return Some(self.rule.expansion[self.dot].clone());
@@ -53,6 +57,7 @@ impl State {
 }
 
 impl Display for State {
+    /// Formats state as `A -> alpha ● beta`.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let (rule, before_dot, after_dot) = dot_state(&self.rule, self.dot);
         write!(f, "{rule} -> {before_dot} ● {after_dot}")
@@ -65,6 +70,7 @@ pub struct EarleyParser {
 }
 
 impl EarleyParser {
+    /// Creates an Earley parser.
     pub fn new(parser_frontend: Arc<ParserFrontend>, parser_config: Arc<ParserOption>) -> Self {
         Self {
             parser_frontend,
@@ -72,10 +78,12 @@ impl EarleyParser {
         }
     }
 
+    /// Earley prediction step: adds states for rules of the expected non-terminal.
     #[inline(always)]
     fn prediction(
         &self,
         chart: &mut [HashSet<Arc<State>>],
+        worklist: &mut VecDeque<Arc<State>>,
         next_symbol: Arc<Symbol>,
         i: usize,
         added: bool,
@@ -95,70 +103,73 @@ impl EarleyParser {
                 children: vec![],
             });
 
-            if chart[i].insert(next_state) {
+            if chart[i].insert(next_state.clone()) {
+                worklist.push_back(next_state);
                 added = true;
             }
         }
         added
     }
 
+    /// Earley completion step: advances states waiting on a completed non-terminal.
     #[inline(always)]
     fn complete(
         &self,
         chart: &mut [HashSet<Arc<State>>],
+        worklist: &mut VecDeque<Arc<State>>,
         state: Arc<State>,
         i: usize,
         added: bool,
     ) -> bool {
         // COMPLETE
         let mut added = added;
-        let prev_len = chart[i].len();
-
-        let (left_chart, right_chart) = chart.split_at_mut(i);
-
-        for s in left_chart[state.start]
+        let candidates: Vec<Arc<State>> = chart[state.start]
             .iter()
-            .filter(|&x| {
-                if let Some(next_symbol) = x.next_symbol() {
-                    return next_symbol == state.rule.origin;
-                }
-                false
-            })
-            .map(|x1| {
-                let mut child = x1.children.clone();
-                if state.rule.origin.starts_with("_")
-                    || (x1.rule.is_expand() && x1.rule.origin == state.rule.origin)
+            .filter_map(|x| {
+                if let Some(next_symbol) = x.next_symbol()
+                    && next_symbol == state.rule.origin
                 {
-                    for ast in state.children.iter() {
-                        child.push(ast.clone());
-                    }
-                } else if state.rule.is_expand() && state.children.len() == 1 {
-                    child.push(state.children[0].clone());
-                } else {
-                    child.push(AST::Tree(
-                        state.rule.origin.get_value(),
-                        state.children.clone(),
-                    ));
+                    return Some(x.clone());
                 }
-                Arc::new(State {
-                    rule: x1.rule.clone(),
-                    dot: x1.dot + 1,
-                    start: x1.start,
-                    end: i,
-                    children: child,
-                })
+                None
             })
-        {
-            right_chart[0].insert(s);
-        }
+            .collect();
 
-        if chart[i].len() > prev_len {
-            added = true;
+        for x1 in candidates {
+            let mut child = x1.children.clone();
+            if state.rule.origin.starts_with("_")
+                || (x1.rule.is_expand() && x1.rule.origin == state.rule.origin)
+            {
+                for ast in state.children.iter() {
+                    child.push(ast.clone());
+                }
+            } else if state.rule.is_expand() && state.children.len() == 1 {
+                child.push(state.children[0].clone());
+            } else {
+                child.push(AST::Tree(
+                    state.rule.origin.as_ref().as_str().to_string(),
+                    state.children.clone(),
+                ));
+            }
+
+            let next_state = Arc::new(State {
+                rule: x1.rule.clone(),
+                dot: x1.dot + 1,
+                start: x1.start,
+                end: i,
+                children: child,
+            });
+
+            if chart[i].insert(next_state.clone()) {
+                worklist.push_back(next_state);
+                added = true;
+            }
         }
 
         added
     }
 
+    /// Earley scan step: consumes a matching terminal token into the next chart column.
     #[inline(always)]
     fn scan(
         &self,
@@ -200,10 +211,12 @@ impl EarleyParser {
 }
 
 impl Parser for EarleyParser {
+    /// Returns parser frontend.
     fn get_parser_frontend(&self) -> Arc<ParserFrontend> {
         self.parser_frontend.clone()
     }
 
+    /// Runs Earley parsing and returns an AST according to ambiguity strategy.
     fn parse(&self, mut token_iter: Tokenizer) -> Result<AST, ParserError> {
         let mut chart = vec![];
 
@@ -226,39 +239,26 @@ impl Parser for EarleyParser {
             if token.is_some() {
                 j += 1;
             }
-            let mut cache: HashSet<Arc<State>> = HashSet::new();
+            if chart.get(i).is_none() {
+                chart.push(HashSet::new());
+            }
 
-            let mut added = true;
-            while added {
-                added = false;
-
-                if chart.get(i).is_none() {
-                    chart.push(HashSet::new());
-                }
-
-                let states: HashSet<Arc<State>> = chart[i].clone();
-
-                for state in states {
-                    if !cache.insert(state.clone()) {
-                        continue;
-                    }
-
-                    if state.is_complete() {
-                        // COMPLETE
-                        added = self.complete(&mut chart, state, i, added);
-                    } else if let Some(next_symbol) = state.next_symbol() {
-                        if self
-                            .parser_frontend
-                            .get_parser()
-                            .contains_rule(&next_symbol)
-                        {
-                            // PREDICTION
-                            added = self.prediction(&mut chart, next_symbol, i, added);
-                        } else {
-                            // SCAN
-                            added =
-                                self.scan(&mut chart, token.clone(), &state, next_symbol, i, added);
-                        }
+            let mut worklist: VecDeque<Arc<State>> = chart[i].iter().cloned().collect();
+            while let Some(state) = worklist.pop_front() {
+                if state.is_complete() {
+                    // COMPLETE
+                    self.complete(&mut chart, &mut worklist, state, i, false);
+                } else if let Some(next_symbol) = state.next_symbol() {
+                    if self
+                        .parser_frontend
+                        .get_parser()
+                        .contains_rule(&next_symbol)
+                    {
+                        // PREDICTION
+                        self.prediction(&mut chart, &mut worklist, next_symbol, i, false);
+                    } else {
+                        // SCAN
+                        self.scan(&mut chart, token.clone(), &state, next_symbol, i, false);
                     }
                 }
             }
@@ -277,7 +277,7 @@ impl Parser for EarleyParser {
             .last()
             .unwrap()
             .iter()
-            .filter(|&x| x.rule.origin.get_value() == "gamma");
+            .filter(|&x| x.rule.origin.as_ref().as_str() == "gamma");
 
         match self.parser_config.ambiguity {
             Ambiguity::Resolve => {
@@ -296,5 +296,56 @@ impl Parser for EarleyParser {
             }
         }
         Err(ParserError::FailedToParse(token_iter.get_text().to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::grammar::Algorithm;
+    use crate::load_grammar::load_grammar;
+
+    #[test]
+    fn state_core_methods_and_display_work() {
+        let rule = Arc::new(Rule::new(
+            Arc::new(Symbol::NonTerminal("expr".to_string())),
+            vec![
+                Arc::new(Symbol::NonTerminal("expr".to_string())),
+                Arc::new(Symbol::Terminal("INT".to_string())),
+            ],
+            Arc::new(RuleOption::default()),
+            0,
+        ));
+        let s0 = State::new(rule.clone(), 0, 0, 0, vec![]);
+        let s2 = State::new(rule, 2, 0, 1, vec![]);
+
+        assert!(!s0.is_complete());
+        assert_eq!(s0.next_symbol().unwrap().as_ref().as_str(), "expr");
+        assert!(s2.is_complete());
+        assert!(s2.next_symbol().is_none());
+        assert!(format!("{s0}").contains("expr ->"));
+    }
+
+    #[test]
+    fn earley_parser_parses_and_explicit_ambiguity_returns_tree() {
+        let grammar = r#"
+        start: a
+        a: "x" | "x"
+        "#;
+        let parser_opt = Arc::new(ParserOption::default());
+        let pf = load_grammar(grammar.to_string(), parser_opt.clone());
+        let earley = EarleyParser::new(pf.clone(), parser_opt);
+        let tk = pf.tokenizer("x", &[]);
+        assert!(earley.parse(tk).is_ok());
+
+        let explicit_opt = Arc::new(ParserOption {
+            algorithm: Algorithm::Earley,
+            ambiguity: Ambiguity::Explicit,
+            ..ParserOption::default()
+        });
+        let explicit_pf = load_grammar(grammar.to_string(), explicit_opt.clone());
+        let explicit = EarleyParser::new(explicit_pf.clone(), explicit_opt);
+        let ast = explicit.parse(explicit_pf.tokenizer("x", &[])).unwrap();
+        assert_eq!(ast.get_tree_name(), Some(&"_ambiguity".to_string()));
     }
 }

@@ -10,27 +10,35 @@ pub struct ParserConf {
 }
 
 impl ParserConf {
+    /// Creates parser configuration with rule table and ignored terminal names.
     pub fn new(rules: HashMap<Arc<Symbol>, Vec<Arc<Rule>>>, ignores: Vec<String>) -> Self {
         Self { rules, ignores }
     }
 
+    /// Returns terminal names ignored during tokenization.
     pub(crate) fn get_ignores(&self) -> &Vec<String> {
         &self.ignores
     }
 
+    /// Checks whether a non-terminal has at least one rule.
     pub fn contains_rule(&self, name: &Arc<Symbol>) -> bool {
         self.rules.contains_key(name)
     }
 
+    /// Appends a rule to the rule table under its origin symbol.
     pub fn add_rules(&mut self, rule: Arc<Rule>) {
         let val = self.rules.entry(rule.origin.clone()).or_default();
         val.push(rule);
     }
 
+    /// Returns an iterator over rule expansions of a symbol.
+    ///
+    /// Panics if the symbol does not exist in the rule map.
     pub fn next_expansion(&self, name: &Arc<Symbol>) -> impl Iterator<Item = &Arc<Rule>> + '_ {
         self.rules.get(name).unwrap().iter()
     }
 
+    /// Returns all rule expansions from the grammar.
     pub fn get_all_expansion(&self) -> Vec<Arc<Rule>> {
         #[cfg(feature = "debug")]
         {
@@ -40,7 +48,7 @@ impl ParserConf {
                 .flatten()
                 .cloned()
                 .collect::<Vec<Arc<Rule>>>();
-            rules.sort_by_key(|x| x.origin.get_value().clone());
+            rules.sort_by(|a, b| a.origin.as_ref().as_str().cmp(b.origin.as_ref().as_str()));
             rules
         }
         #[cfg(not(feature = "debug"))]
@@ -53,6 +61,7 @@ impl ParserConf {
         }
     }
 
+    /// Returns all rules for the specified symbol, if present.
     pub fn get_expansion(&self, key: &Arc<Symbol>) -> Option<&Vec<Arc<Rule>>> {
         self.rules.get(key)
     }
@@ -65,20 +74,78 @@ pub struct ParserFrontend {
 }
 
 impl ParserFrontend {
+    /// Creates a parser frontend with lexer and parser configurations.
     pub(crate) fn new(lexer: Arc<LexerConf>, parser: Arc<ParserConf>) -> Self {
         Self { lexer, parser }
     }
 
+    /// Returns a tokenizer for `text` using `ignore` terminal names.
     pub(crate) fn tokenizer(&self, text: &str, ignore: &[String]) -> Tokenizer {
         self.lexer.tokenize(text, ignore)
     }
 
+    /// Returns the lexer configuration.
     #[allow(dead_code)]
     pub(crate) fn get_lexer(&self) -> Arc<LexerConf> {
         self.lexer.clone()
     }
 
+    /// Returns the parser configuration.
     pub fn get_parser(&self) -> &Arc<ParserConf> {
         &self.parser
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::grammar::RuleOption;
+    use crate::lexer::{RegexFlag, TerminalDef};
+
+    fn sample_rule(origin: &str, expansion: &[&str]) -> Arc<Rule> {
+        Arc::new(Rule::new(
+            Arc::new(Symbol::NonTerminal(origin.to_string())),
+            expansion.iter().map(|x| crate::lexer::get_symbol(x)).collect(),
+            Arc::new(RuleOption::default()),
+            0,
+        ))
+    }
+
+    #[test]
+    fn parser_conf_crud_and_iteration_work() {
+        let start_rule = sample_rule("start", &["expr"]);
+        let mut pc = ParserConf::new(
+            HashMap::from([(Arc::new(Symbol::NonTerminal("start".to_string())), vec![start_rule])]),
+            vec!["WS".to_string()],
+        );
+
+        let expr_rule = sample_rule("expr", &["INT"]);
+        pc.add_rules(expr_rule.clone());
+
+        let start = Arc::new(Symbol::NonTerminal("start".to_string()));
+        let expr = Arc::new(Symbol::NonTerminal("expr".to_string()));
+
+        assert!(pc.contains_rule(&start));
+        assert!(pc.contains_rule(&expr));
+        assert_eq!(pc.get_ignores(), &vec!["WS".to_string()]);
+        assert_eq!(pc.next_expansion(&expr).count(), 1);
+        assert_eq!(pc.get_all_expansion().len(), 2);
+        assert_eq!(pc.get_expansion(&expr).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn parser_frontend_exposes_lexer_and_parser() {
+        let pc = Arc::new(ParserConf::new(HashMap::new(), vec![]));
+        let lx = Arc::new(LexerConf::new(vec![Arc::new(TerminalDef::with_regex(
+            "INT",
+            r"\d+",
+            RegexFlag::default(),
+        ))]));
+        let pf = ParserFrontend::new(lx.clone(), pc.clone());
+
+        let mut tk = pf.tokenizer("42", &[]);
+        assert_eq!(tk.next().unwrap().word, "42".to_string());
+        assert!(Arc::ptr_eq(pf.get_parser(), &pc));
+        assert!(Arc::ptr_eq(&pf.get_lexer(), &lx));
     }
 }

@@ -24,9 +24,8 @@ and developer-friendly framework for building custom parsers, interpreters, and 
 ## Grammar reference
 Please reference [Lark's grammar](https://lark-parser.readthedocs.io/en/stable/grammar.html) page.
 
-**Note: 
-*Few Lark's grammar syntax are modified, like `%import`. Please check examples.***
-
+**Note:**
+* *Few Lark's grammar syntax are modified, like `%import`. Please check examples.*
 
 ## List of Common Terminals
 

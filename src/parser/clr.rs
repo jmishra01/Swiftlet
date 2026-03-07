@@ -31,6 +31,7 @@ pub enum ActionTable {
 }
 
 impl ActionTable {
+    /// Returns action kind label.
     fn name(&self) -> String {
         match self {
             ActionTable::Shift(_) => "Shift".to_string(),
@@ -49,6 +50,7 @@ pub(crate) struct Item {
 }
 
 impl Item {
+    /// Creates an LR item with lookahead.
     fn new(rule_id: usize, dot: usize, rule: Arc<Rule>, lookahead: Arc<Symbol>) -> Item {
         Item {
             rule_id,
@@ -58,10 +60,12 @@ impl Item {
         }
     }
 
+    /// Returns whether dot is at rule end.
     pub(crate) fn is_complete(&self) -> bool {
         self.dot == self.rule.len()
     }
 
+    /// Returns whether `symbol` is the next expected symbol.
     pub(crate) fn is_next_symbol(&self, symbol: &Arc<Symbol>) -> bool {
         if self.is_complete() {
             return false;
@@ -69,6 +73,7 @@ impl Item {
         self.rule.expansion[self.dot] == *symbol
     }
 
+    /// Returns next symbol after dot.
     pub(crate) fn next_symbol(&self) -> Option<&Arc<Symbol>> {
         if self.is_complete() {
             return None;
@@ -76,6 +81,7 @@ impl Item {
         Some(&self.rule.expansion[self.dot])
     }
 
+    /// Returns a new item with dot advanced by one.
     fn move_dot(&self) -> Option<Self> {
         if self.is_complete() {
             return None;
@@ -90,6 +96,7 @@ impl Item {
 }
 
 impl Display for Item {
+    /// Formats item as `rule_id; A -> alpha ● beta ; lookahead`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (rule, before_dot, after_dot) = dot_state(&self.rule, self.dot);
         write!(
@@ -99,16 +106,18 @@ impl Display for Item {
             rule,
             before_dot,
             after_dot,
-            self.lookahead.get_value()
+            self.lookahead.as_ref().as_str()
         )
     }
 }
 
+/// Returns special end-of-input terminal symbol.
 pub(crate) fn get_last_symbol() -> Arc<Symbol> {
     terms!("$END")
 }
 
 #[inline]
+/// Collects grammar rules and constructs a symbol-to-rule index map.
 pub(crate) fn setup(
     parser_frontend: Arc<ParserFrontend>,
     start: Arc<Symbol>,
@@ -144,6 +153,7 @@ pub struct Clr {
 }
 
 impl Clr {
+    /// Creates a CLR parser and builds canonical items plus ACTION/GOTO tables.
     pub(crate) fn new(
         parser_frontend: Arc<ParserFrontend>,
         parser_conf: Arc<ParserOption>,
@@ -178,16 +188,19 @@ impl Clr {
         clr
     }
 
+    /// Returns ordered rule list used by parser tables.
     fn get_rules(&self) -> &Vec<Arc<Rule>> {
         &self.rules
     }
 
     #[inline]
+    /// Returns FIRST set for a symbol.
     fn get_first(&self, seq: &Arc<Symbol>) -> Option<&HashSet<Arc<Symbol>>> {
         self.first.get(seq)
     }
 
     #[inline]
+    /// Builds ACTION and GOTO tables from canonical items and transitions.
     fn build_action_and_goto_table(
         &self,
         canonical_items: &VecItemSet,
@@ -220,6 +233,7 @@ impl Clr {
         (action, goto)
     }
 
+    /// Resolves a parser action from a possible conflict set using priorities.
     fn get_next_action<'a>(&self, lr_table: &'a IndexSet<ActionTable>) -> Result<&'a ActionTable, ParserError> {
         if lr_table.len() == 1 {
             return Ok(lr_table.first().unwrap());
@@ -268,6 +282,7 @@ impl Clr {
     }
 
     #[inline]
+    /// Executes shift action and fetches next lookahead token.
     fn shift_action(&self,
                     pos: usize,
                     stack_states: &mut VecDeque<usize>,
@@ -280,7 +295,7 @@ impl Clr {
             token
         } else {
             Arc::new(Token::new(
-                get_last_symbol().get_value(),
+                get_last_symbol().as_ref().as_str().to_string(),
                 0,
                 0,
                 0,
@@ -289,6 +304,7 @@ impl Clr {
         }
     }
 
+    /// Executes reduce action and performs goto transition.
     fn reduce_action(&self,
                      pos: usize,
                      stack_states: &mut VecDeque<usize>,
@@ -316,7 +332,7 @@ impl Clr {
         if rule.rule_option.is_expand() && children.len() == 1 {
             stack_symbols.push_back(children[0].clone());
         } else {
-            stack_symbols.push_back(AST::Tree(rule.origin.get_value(), children));
+            stack_symbols.push_back(AST::Tree(rule.origin.as_ref().as_str().to_string(), children));
         }
 
         if let Some(index) = stack_states.iter().last()
@@ -331,10 +347,12 @@ impl Clr {
 }
 
 impl Parser for Clr {
+    /// Returns parser frontend.
     fn get_parser_frontend(&self) -> Arc<ParserFrontend> {
         self.parser_frontend.clone()
     }
 
+    /// Runs CLR parse loop and returns AST or parser error.
     fn parse(&self, mut tokenizer: Tokenizer) -> Result<AST, ParserError> {
         let mut stack_states = VecDeque::from([0usize]);
         let mut stack_symbols: VecDeque<AST> = VecDeque::new();
@@ -371,6 +389,7 @@ impl Parser for Clr {
     }
 }
 
+/// Computes closure for an item set and collects next transition symbols.
 pub(crate) fn closure(
     lr_parser: &Clr,
     it_item: impl Iterator<Item=Arc<Item>>,
@@ -432,6 +451,7 @@ pub(crate) fn closure(
     (items, next_symbols)
 }
 
+/// Expands canonical LR item sets recursively and records transitions.
 fn find_canonical_items(
     lr_parser: &mut Clr,
     canonical_items: &mut VecItemSet,
@@ -472,6 +492,7 @@ fn find_canonical_items(
     }
 }
 
+/// Builds canonical collection of LR(1) item sets and transition graph.
 pub(crate) fn canonical_items(lr_parser: &mut Clr) -> (VecItemSet, GoTo) {
     // Augmented grammar
     let first_items = [Arc::new(Item::new(
@@ -498,6 +519,7 @@ pub(crate) fn canonical_items(lr_parser: &mut Clr) -> (VecItemSet, GoTo) {
     (canonical_items, transitions)
 }
 
+/// Computes FIRST sets used during CLR closure expansion.
 pub(crate) fn first_set(rules: &[Arc<Rule>]) -> First {
     let mut first: First = rules
         .iter()
@@ -540,8 +562,9 @@ pub(crate) fn first_set(rules: &[Arc<Rule>]) -> First {
 
 // ---------------- CLR Debug ---------------- //
 #[inline]
+/// Prints numbered rules for debug tracing.
 fn debug_clr_rules(rules: &[Arc<Rule>]) {
-    println!("List of Rules in BNF format.");
+    println!("\nList of Rules in BNF format.");
     println!("============================");
 
     for (index, rule) in rules.iter().enumerate() {
@@ -551,20 +574,22 @@ fn debug_clr_rules(rules: &[Arc<Rule>]) {
 }
 
 #[inline]
+/// Prints FIRST sets for debug tracing.
 fn debug_first_set(first: &First) {
     println!("First Set");
     println!("=========");
     for (k, v) in first.iter() {
         println!(
             "\t{:?} => {:?}",
-            k.get_value(),
-            v.iter().map(|x| { x.get_value() }).collect::<Vec<String>>()
+            k.as_ref().as_str(),
+            v.iter().map(|x| { x.as_ref().as_str().to_string() }).collect::<Vec<String>>()
         );
     }
     println!();
 }
 
 #[inline]
+/// Prints canonical items and transitions for debug tracing.
 fn debug_canonical_and_transtion_sets(canonical_items: &VecItemSet, transitions: &GoTo) {
     println!("Canonical Items:");
     println!("================");
@@ -579,7 +604,7 @@ fn debug_canonical_and_transtion_sets(canonical_items: &VecItemSet, transitions:
     println!("Transitions:");
     println!("============");
     for ((index, sym), transition) in transitions.iter() {
-        println!("\t(I-{:<3}, {}): I-{}", index, sym.get_value(), transition);
+        println!("\t(I-{:<3}, {}): I-{}", index, sym.as_ref().as_str(), transition);
     }
 }
 // ----------------------------------------------- //
