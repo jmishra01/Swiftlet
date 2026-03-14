@@ -1,81 +1,17 @@
-[package]
-name = "barat"
-version = "0.1.1"
-edition = "2024"
-description = "Barat is a high-performance text-parsing library for Rust, inspired by Python’s Lark."
-license = "MIT"
-repository = "https://github.com/jmishra01/barat"
-documentation = "https://docs.rs/barat"
-keywords = ["parsing", "EARLEY", "CLR", "tokenizer", "AST"]
-categories = ["parser-implementations", "algorithms", "compilers", "parsing"]
-readme = "README.md"
+[workspace]
+members = ["crates/*", "pyswiftlet"]
+resolver = "3"
 
-[dependencies]
+
+[workspace.dependencies]
+swiftlet = {path="crates/swiftlet"}
+pyo3 = { version = "0.28.2", features = ["extension-module", "pyo3-macros"] }
 fancy-regex = { version = "0.17.0" }
 indexmap = { version = "2.11.0" }
 thiserror = { version = "2.0.16" }
+chrono = {version="0.4"}
 
-[features]
-debug = []
 
-[profile.dev]
-opt-level = 1
+[profile.samply]
+inherits = "release"
 debug = true
-incremental = true
-lto = false
-
-[profile.dev.package."*"]
-opt-level = 3
-
-[profile.release]
-opt-level = 3
-lto = "fat"
-codegen-units = 1
-panic = "abort"
-strip = "symbols"
-incremental = false
-debug = false
-
-[dev-dependencies]
-criterion = { version = "0.7.0" }
-
-[[bench]]
-name = "get_terminals"
-harness = false
-
-[[bench]]
-name = "benchmark"
-harness = false
-
-[[example]]
-name = "range_grammar"
-
-[[example]]
-name = "grammar"
-
-[[example]]
-name = "grammar_test"
-
-[[example]]
-name = "grammar_testing"
-
-[[example]]
-name = "grammar_testing_slr"
-
-[[example]]
-name = "math"
-
-[[example]]
-name = "symbol_priority"
-
-[[test]]
-name = "simple_grammar"
-path = "tests/simple_grammar_test.rs"
-
-[[test]]
-name = "plus_int_grammar"
-path = "tests/plus_int_grammar_test.rs"
-
-[[test]]
-name = "rule_feature_in_grammar_test"
-path = "tests/rule_feature_in_grammar_test.rs"

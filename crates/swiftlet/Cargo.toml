@@ -1,0 +1,78 @@
+[package]
+name = "swiftlet"
+version = "0.1.1"
+edition = "2024"
+description = "swiftlet is a high-performance text-parsing library for Rust, inspired by Python’s Lark."
+license = "MIT"
+repository = "https://github.com/jmishra01/swiftlet"
+documentation = "https://docs.rs/swiftlet"
+keywords = ["parsing", "EARLEY", "CLR", "tokenizer", "AST"]
+categories = ["parser-implementations", "algorithms", "compilers", "parsing"]
+readme = "README.md"
+
+[dependencies]
+fancy-regex = {workspace = true}
+indexmap = {workspace = true}
+thiserror = {workspace = true}
+
+[profile.dev]
+opt-level = 1
+debug = true
+incremental = true
+lto = false
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+incremental = false
+debug = false
+
+[dev-dependencies]
+criterion = { version = "0.8.2" }
+
+[[bench]]
+name = "get_terminals"
+harness = false
+
+[[bench]]
+name = "benchmark"
+harness = false
+
+[[example]]
+name = "range_grammar"
+
+[[example]]
+name = "grammar"
+
+[[example]]
+name = "grammar_test"
+
+[[example]]
+name = "grammar_testing"
+
+[[example]]
+name = "grammar_testing_slr"
+
+[[example]]
+name = "math"
+
+[[example]]
+name = "symbol_priority"
+
+[[test]]
+name = "simple_grammar"
+path = "tests/simple_grammar_test.rs"
+
+[[test]]
+name = "plus_int_grammar"
+path = "tests/plus_int_grammar_test.rs"
+
+[[test]]
+name = "rule_feature_in_grammar_test"
+path = "tests/rule_feature_in_grammar_test.rs"
