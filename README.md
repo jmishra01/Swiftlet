@@ -13,12 +13,11 @@ and developer-friendly framework for building custom parsers, interpreters, and 
 ## Features
 * Earley parser, capable to parse any context free grammar (CFG).
   * Use cache, to further optimize parsing.
-* Canonical-LR (CLR) parser, less powerful than Earley parser, but it's fast and memory optimize.
+* Canonical LR (CLR) parser is less powerful than an Earley parser, but it is fast and memory-efficient.
 * EBNF base grammar
 * Builds a parse-tree (AST) based on the grammar.
 * Display each step of parser, when debug set true.
 * Line and column tracking.
-* Common terminals are added, list mention below.
 
 ## Example
 
