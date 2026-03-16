@@ -20,33 +20,6 @@ and developer-friendly framework for building custom parsers, interpreters, and 
 * Line and column tracking.
 * Common terminals are added, list mention below.
 
-
-## Grammar reference
-Please reference [Lark's grammar](https://lark-parser.readthedocs.io/en/stable/grammar.html) page.
-
-**Note:**
-* *Few Lark's grammar syntax are modified, like `%import`. Please check examples.*
-
-## List of Common Terminals
-
-| Terminal Name | Description                  |
-|---------------|------------------------------|
-| CWORD         | Match words separated by `_` |
-| DECIMAL       | Match decimal number         |
-| DIGIT         | Match single digit number    |
-| HEXDIGIT      | Match hex-digit number       |
-| INT           | Match number                 |
-| LCASE_LETTER  | Match lower-case characters  |
-| NEWLINE       | Match new line               |
-| N_INT         | Match negative number        |
-| QUOTE         | Match word wrapped with `'`  |
-| SIGNED_INT    | Match Signed number          |
-| STRING        | Match word wrapped with `"`  |
-| UCASE_LETTER  | Match upper-case characters  |
-| WORD          | Match characters             |
-| WS            | Match white space            |
-
-
 ## Example
 
 ```rust
@@ -106,3 +79,7 @@ Total: 11
 ```
 
 **For more examples, please check examples folder.**
+
+
+## Grammar reference
+Click [here](https://github.com/jmishra01/Swiftlet/blob/main/grammar_reference.md)

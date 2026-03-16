@@ -118,11 +118,6 @@ venv.bak/
 .spyderproject
 .spyproject
 
-# ide
-.idea
-
-# performance
-*.gz
 
 # Rope project settings
 .ropeproject
@@ -132,3 +127,10 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# AI
+.ai
+# ide
+.idea
+# performance
+*.gz

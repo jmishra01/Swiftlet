@@ -1,6 +1,6 @@
 [package]
 name = "swiftlet"
-version = "0.1.1"
+version = "0.1.0"
 edition = "2024"
 description = "swiftlet is a high-performance text-parsing library for Rust, inspired by Python’s Lark."
 license = "MIT"
@@ -8,7 +8,7 @@ repository = "https://github.com/jmishra01/swiftlet"
 documentation = "https://docs.rs/swiftlet"
 keywords = ["parsing", "EARLEY", "CLR", "tokenizer", "AST"]
 categories = ["parser-implementations", "algorithms", "compilers", "parsing"]
-readme = "README.md"
+readme = "../../README.md"
 
 [dependencies]
 fancy-regex = {workspace = true}
