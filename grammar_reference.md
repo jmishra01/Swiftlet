@@ -359,25 +359,11 @@ precedence than addition.
 
 To write maintainable grammars:
 
-### 1. Keep rules small
-
-Avoid very long rules.
-
-### 2. Avoid ambiguous terminals
-
-Ensure tokens do not overlap unnecessarily.
-
-### 3. Use priorities when necessary
-
-Resolve token conflicts explicitly.
-
-### 4. Use imports for large grammars
-
-Break grammars into reusable modules.
-
-### 5. Ignore whitespace
-
-Always define whitespace rules.
+1. Keep rules small `Avoid very long rules`.
+2. Avoid ambiguous terminals `Ensure tokens do not overlap unnecessarily`.
+3. Use priorities when necessary `Resolve token conflicts explicitly`.
+4. Use imports for large grammars `Break grammars into reusable modules`.
+5. Ignore whitespace `Always define whitespace rules`.
 
 ------------------------------------------------------------------------
 
