@@ -68,7 +68,7 @@ Rules can reference:
 
 Rules form the **hierarchical structure of the parse tree**.
 
-Example: [calculate.rs](crates/swiftlet/examples/calculate.rs)
+Example: [gr_rule.rs](crates/swiftlet/examples/gr_rule.rs)
 
 ------------------------------------------------------------------------
 
@@ -94,6 +94,8 @@ Terminals can be defined using:
 -   regular expressions
 -   combinations of other terminals
 
+Example: [gr_terminals.rs](crates/swiftlet/examples/gr_terminals.rs)
+
 ------------------------------------------------------------------------
 
 # 4. String Literals
@@ -107,6 +109,8 @@ Example:
     LPAREN: "("
 
 They are useful for operators and keywords.
+
+Example: [gr_string_literals.rs](crates/swiftlet/examples/gr_string_literals.rs)
 
 ------------------------------------------------------------------------
 
@@ -122,6 +126,8 @@ Example:
 
 Regex terminals are compiled into the lexer for efficient matching.
 
+Example: [gr_regular_expression.rs](crates/swiftlet/examples/gr_regular_expression.rs)
+
 ------------------------------------------------------------------------
 
 # 6. Alternatives
@@ -135,6 +141,9 @@ Example:
         | term
 
 This means that `expr` can match any of the listed alternatives.
+
+
+Example: [gr_alternatives.rs](crates/swiftlet/examples/gr_alternatives.rs)
 
 ------------------------------------------------------------------------
 
@@ -158,6 +167,8 @@ Matches:
     1,2
     1,2,3
 
+Example: [gr_repetition_operators.rs](crates/swiftlet/examples/gr_repetition_operators.rs)
+
 ------------------------------------------------------------------------
 
 # 8. Grouping
@@ -173,6 +184,11 @@ Grouping controls:
 -   repetition scope
 -   precedence
 -   expression structure
+
+
+Example:
+* [gr_repetition_operators.rs](crates/swiftlet/examples/gr_repetition_operators.rs)
+* [gr_grouping.rs](crates/swiftlet/examples/gr_grouping.rs)
 
 ------------------------------------------------------------------------
 
@@ -218,6 +234,10 @@ Supported flags:
 | `u`  | unicode             |
 | `x`  | verbose regex       |
 
+
+Example: [gr_regex_flags.rs](crates/swiftlet/examples/gr_regex_flags.rs)
+
+
 ------------------------------------------------------------------------
 
 # 11. Token Matching Priority
@@ -258,6 +278,8 @@ Typically used for:
 
 Ignored tokens do not appear in the parse tree.
 
+Example: [gr_ignore.rs](crates/swiftlet/examples/gr_ignore.rs)
+
 ------------------------------------------------------------------------
 
 ## Import
@@ -294,6 +316,7 @@ This allows grammar reuse and modular design.
 | WORD          | Match characters             |
 | WS            | Match white space            |
 
+Example: [gr_import.rs](crates/swiftlet/examples/gr_import.rs)
 
 ------------------------------------------------------------------------
 
