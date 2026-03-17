@@ -68,6 +68,8 @@ Rules can reference:
 
 Rules form the **hierarchical structure of the parse tree**.
 
+Example: [calculate.rs](crates/swiftlet/examples/calculate.rs)
+
 ------------------------------------------------------------------------
 
 # 3. Terminals
