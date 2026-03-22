@@ -4,6 +4,7 @@ use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
 
+/// Represents either a token leaf or a named tree node in the parse result.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AST {
     Token(Arc<Token>),
@@ -44,34 +45,28 @@ impl AST {
     pub fn get_text(&self) -> String {
         inline_print(self)
     }
-
-    pub fn get_rule(&self, tree_name: &str) -> Option<&AST> {
-        match self {
-            AST::Token(_) => None,
-            AST::Tree(name, children) => {
-                if name == tree_name {
-                    return Some(self)
-                }
-                for child in children {
-                    if let Some(rule) = child.get_rule(tree_name) {
-                        return Some(rule);
-                    }
-                }
-                None
-            }
-        }
+    // Original — finds first match only
+    /// Returns the first subtree with the provided name.
+    pub fn get_tree<'a>(&'a self, tree_name: &'a str) -> Option<&'a AST> {
+        self.iter_trees(tree_name).next()
     }
 
-    pub fn get_child(&self, tree_name: &str) -> Option<Vec<&Vec<AST>>> {
+    /// Lazily iterates over every subtree with the provided name.
+    pub fn iter_trees<'a>(&'a self, tree_name: &'a str) -> ASTTreeIter<'a> {
+        ASTTreeIter::new(self, tree_name)
+    }
+
+    /// Returns the children collections for all matching subtrees.
+    pub fn get_child_tree(&self, tree_name: &str) -> Option<Vec<&AST>> {
         match self {
             AST::Token(_) => None,
             AST::Tree(name, children) => {
                 let mut ast_vec = Vec::new();
                 if name == tree_name {
-                    ast_vec.push(children);
+                    ast_vec.push(self);
                 }
                 for child in children {
-                    if let Some(rule) = child.get_child(tree_name) {
+                    if let Some(rule) = child.get_child_tree(tree_name) {
                         ast_vec.extend(rule);
                     }
                 }
@@ -79,12 +74,64 @@ impl AST {
             }
         }
     }
+
+    pub fn get_last_child(&self) -> Option<&AST> {
+        match self {
+           AST::Token(_) => None,
+            AST::Tree(_, children) => children.last(),
+        }
+    }
+}
+
+/// Depth-first iterator over matching AST tree nodes.
+pub struct ASTTreeIter<'a> {
+    stack: Vec<&'a AST>,
+    tree_name: &'a str,
+}
+
+impl<'a> ASTTreeIter<'a> {
+    fn new(root: &'a AST, tree_name: &'a str) -> Self {
+        ASTTreeIter {
+            stack: vec![root],
+            tree_name,
+        }
+    }
+}
+
+impl<'a> Iterator for ASTTreeIter<'a> {
+    type Item = &'a AST;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(node) = self.stack.pop() {
+            if let AST::Tree(name, children) = node {
+                // Push children onto stack for future traversal (reversed for left-to-right order)
+                self.stack.extend(children.iter().rev());
+
+                if name == self.tree_name {
+                    return Some(node); // yield this match
+                }
+            }
+        }
+        None // stack exhausted
+    }
 }
 
 /// Converts AST to a compact single-line textual form.
 fn inline_print(tree: &AST) -> String {
     match tree {
-        AST::Token(token) => format!("\"{}\"", token.word()),
+        AST::Token(token) => {
+            let word = token.word().to_string();
+            let terminal = token.terminal.get_value();
+            if terminal.starts_with("__") {
+                format!("{}", word)
+            } else {
+                format!(
+                    "Token({}, \"{}\")",
+                    token.terminal.get_value(),
+                    token.word()
+                )
+            }
+        }
         AST::Tree(name, children) => {
             let c = children
                 .iter()
@@ -101,16 +148,25 @@ fn pretty_print(tree: &AST, space: String) {
     match tree {
         AST::Token(name) => println!("{}{}", space, name.word()),
         AST::Tree(name, v_ast) => {
+            if v_ast.len() == 1 && matches!(v_ast[0], AST::Token(_)) {
+                let val = match &v_ast[0] {
+                    AST::Token(token) => token.word(),
+                    _ => panic!("Not a token"),
+                };
+                println!("{}{}  {}", space, name, val);
+                return;
+            }
+
             println!("{}{}", space, name);
             let _rep = " ".to_string().repeat(name.len().div_ceil(2));
-            let rep = _rep.as_str();
             for _ast in v_ast {
-                pretty_print(_ast, space.clone() + rep);
+                pretty_print(_ast, space.clone() + "  ");
             }
         }
     }
 }
 
+/// Distinguishes grammar terminals from non-terminals.
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub enum Symbol {
     Terminal(String),
@@ -214,6 +270,7 @@ impl Default for RegexFlag {
     }
 }
 
+/// Defines a terminal token and its matching pattern.
 #[derive(Debug, Clone)]
 pub struct TerminalDef {
     pub(crate) name: Arc<Symbol>,
@@ -283,6 +340,7 @@ impl PartialEq for TerminalDef {
     }
 }
 
+/// Stores a concrete token slice and its source location metadata.
 #[derive(Debug, Clone)]
 pub struct Token {
     source: Arc<str>,
@@ -310,6 +368,26 @@ impl Token {
         }
     }
 
+    /// Returns the token start byte offset.
+    pub fn get_start(&self) -> usize {
+        self.start
+    }
+
+    /// Returns the token end byte offset.
+    pub fn get_end(&self) -> usize {
+        self.end
+    }
+
+    /// Returns the zero-based source line where the token starts.
+    pub fn get_line(&self) -> usize {
+        self.line
+    }
+
+    /// Returns the terminal name associated with this token.
+    pub fn get_terminal(&self) -> String {
+        self.terminal.get_value()
+    }
+
     /// Returns the token text from the shared source buffer.
     pub fn word(&self) -> &str {
         if self.start <= self.end && self.end <= self.source.len() {
@@ -322,14 +400,13 @@ impl Token {
 
 impl PartialEq for Token {
     fn eq(&self, other: &Self) -> bool {
-        self.word() == other.word()
-            && self.line == other.line
-            && self.terminal == other.terminal
+        self.word() == other.word() && self.line == other.line && self.terminal == other.terminal
     }
 }
 
 impl Eq for Token {}
 
+/// Tokenizes input text using the configured terminal definitions.
 #[derive(Debug, Clone)]
 pub struct Tokenizer {
     text: Arc<str>,
@@ -531,8 +608,8 @@ mod tests {
             "12 34\n56",
             Arc::new(
                 [
-                Arc::new(Symbol::Terminal("WS".to_string())),
-                Arc::new(Symbol::Terminal("_NL".to_string())),
+                    Arc::new(Symbol::Terminal("WS".to_string())),
+                    Arc::new(Symbol::Terminal("_NL".to_string())),
                 ]
                 .into_iter()
                 .collect(),
@@ -553,7 +630,8 @@ mod tests {
     #[test]
     fn tokenizer_panics_on_unmatched_input() {
         let terminals = vec![Arc::new(TerminalDef::with_string("A", "a"))];
-        let mut tokenizer = Tokenizer::new(Arc::<str>::from("x"), &terminals, Arc::new(HashSet::new()));
+        let mut tokenizer =
+            Tokenizer::new(Arc::<str>::from("x"), &terminals, Arc::new(HashSet::new()));
         let panicked = std::panic::catch_unwind(move || {
             let _ = tokenizer.next();
         });

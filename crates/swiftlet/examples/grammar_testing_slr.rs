@@ -1,5 +1,5 @@
-use swiftlet::{Swiftlet, ParserOption};
 use std::sync::Arc;
+use swiftlet::{ParserOption, Swiftlet};
 
 fn main() {
     // Below grammar is not LR(0), as it contain SR conflicts

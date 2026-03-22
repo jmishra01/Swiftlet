@@ -10,6 +10,7 @@ use std::fmt::{Display, Formatter};
 use std::iter::Iterator;
 use std::sync::Arc;
 
+/// Represents a single Earley item together with accumulated children.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct State {
     pub rule: Arc<Rule>,
@@ -19,6 +20,7 @@ pub struct State {
     pub children: Vec<AST>,
 }
 
+/// Deduplication key for Earley states that ignores child trees.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct StateCore {
     rule: Arc<Rule>,
@@ -27,6 +29,7 @@ struct StateCore {
     end: usize,
 }
 
+/// Stores all Earley states generated for a single chart position.
 #[derive(Default)]
 struct ChartColumn {
     states: Vec<Arc<State>>,
@@ -61,6 +64,7 @@ impl State {
 }
 
 impl ChartColumn {
+    /// Inserts a state if it has not already been seen in this column.
     fn insert(&mut self, state: Arc<State>) -> Option<usize> {
         let core = StateCore {
             rule: state.rule.clone(),
@@ -70,14 +74,19 @@ impl ChartColumn {
         };
 
         if let Some(existing) = self.exact_index.get(&core)
-            && existing.iter().any(|candidate| candidate.as_ref() == state.as_ref())
+            && existing
+                .iter()
+                .any(|candidate| candidate.as_ref() == state.as_ref())
         {
             return None;
         }
 
         let index = self.states.len();
         self.states.push(state.clone());
-        self.exact_index.entry(core).or_default().push(state.clone());
+        self.exact_index
+            .entry(core)
+            .or_default()
+            .push(state.clone());
         if let Some(next_symbol) = state.next_symbol()
             && !next_symbol.is_terminal()
         {
@@ -98,6 +107,7 @@ impl Display for State {
     }
 }
 
+/// Earley parser implementation used for general context-free grammars.
 pub struct EarleyParser {
     parser_frontend: Arc<ParserFrontend>,
     parser_config: Arc<ParserOption>,
@@ -163,15 +173,16 @@ impl EarleyParser {
             let mut child = Vec::with_capacity(x1.children.len() + state.children.len() + 1);
             child.extend(x1.children.iter().cloned());
             if state.rule.origin.starts_with("_")
-                || (x1.rule.is_expand() && x1.rule.origin == state.rule.origin) {
+                || (x1.rule.is_expand() && x1.rule.origin == state.rule.origin)
+            {
                 child.extend(state.children.iter().cloned());
-            } else if state.children.len() == 1
-                && state.rule.is_expand() {
+            } else if state.children.len() == 1 && state.rule.is_expand() {
                 child.push(state.children[0].clone());
             } else if state.children.len() == 1
                 && let Some(AST::Tree(name, _)) = state.children.first()
                 && let Some(alias_rule) = state.rule.rule_option.alias_rule()
-                && alias_rule.contains(name) {
+                && alias_rule.contains(name)
+            {
                 child.push(state.children[0].clone());
             } else {
                 child.push(AST::Tree(
@@ -253,6 +264,12 @@ impl Parser for EarleyParser {
         let mut j = 1;
         let mut i = 0;
 
+        #[cfg(feature = "debug")]
+        {
+            println!("\nEarley Parser");
+            println!("=============");
+        }
+
         while i <= j {
             let token = token_iter.next();
 
@@ -280,6 +297,8 @@ impl Parser for EarleyParser {
                     }
                 }
             }
+
+            #[cfg(feature = "debug")]
             if self.parser_config.debug {
                 println!("Index: {} | {:?}", i, token);
                 for state in chart[i].states.iter() {

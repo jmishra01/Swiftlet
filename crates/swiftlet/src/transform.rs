@@ -20,6 +20,7 @@ fn origin_apply(name: &str, priority: usize, alias_rule: OptVecStr) -> (String, 
     (clean_name, rule_option)
 }
 
+/// Converts grammar-parser AST nodes into parser rules and terminal definitions.
 pub struct Transformer {
     terminal: Vec<Arc<TerminalDef>>,
     ignores: Vec<String>,
@@ -62,7 +63,14 @@ impl Transformer {
 
     /// Sorts terminals by descending max width for longest-match behavior.
     pub(crate) fn sort_terminals(&mut self) {
-        self.terminal.sort_by(|a, b| b.max_width.cmp(&a.max_width));
+        self.terminal.sort_by(|a, b| {
+            let order = b.max_width.cmp(&a.max_width);
+            if order.is_eq() {
+                b.value.len().cmp(&a.value.len())
+            } else {
+                order
+            }
+        });
     }
 
     /// Returns generated terminals.
@@ -75,6 +83,7 @@ impl Transformer {
     }
 
     /// Prints transformed grammar rules.
+    #[cfg(feature = "debug")]
     pub fn print_grammar(&self) {
         println!("\nGrammar");
         println!("=======");
@@ -86,6 +95,7 @@ impl Transformer {
     }
 
     /// Prints transformed terminals.
+    #[cfg(feature = "debug")]
     pub fn print_terminals(&self) {
         println!("\nTerminals");
         println!("=========");
@@ -183,7 +193,12 @@ impl Transformer {
                 self.count += 1;
                 let r = format!("_expr_{}_{}", second.trim(), self.count);
 
-                self.insert_rules(r.as_str(), vec![format!("{} {}", r, e), e.to_string()], 0, None);
+                self.insert_rules(
+                    r.as_str(),
+                    vec![format!("{} {}", r, e), e.to_string()],
+                    0,
+                    None,
+                );
 
                 match second {
                     "+" => Some(vec![r]),
@@ -195,7 +210,13 @@ impl Transformer {
     }
 
     /// Inserts a new production list into the rule map.
-    fn insert_rules(&mut self, rule_name: &str, prod: Vec<String>, priority: usize, alias_rules: OptVecStr) {
+    fn insert_rules(
+        &mut self,
+        rule_name: &str,
+        prod: Vec<String>,
+        priority: usize,
+        alias_rules: OptVecStr,
+    ) {
         let (clean_name, rule_option) = origin_apply(rule_name, priority, alias_rules);
 
         let expansion = prod
@@ -223,14 +244,15 @@ impl Transformer {
 
         let mut alias_rules = vec![];
 
-        if let Some(alias_childs) = child.get_child("alias") {
-            for &alias_child in alias_childs.iter() {
-                if let Some(AST::Tree(_, childs)) = alias_child.last() &&
-                    let AST::Token(token) = childs.last().unwrap() {
-                    alias_rules.push(token.word().to_string());
+        if let Some(alias_trees) = child.get_child_tree("alias") {
+            for alias_tree in alias_trees {
+                if let Some(AST::Tree(_, alias_childs)) = alias_tree.get_last_child() &&
+                    let Some(AST::Token(alias_child)) = alias_childs.last() {
+                    alias_rules.push(alias_child.word().to_string());
                 }
             }
         }
+
 
         let prod = self.transform(child).unwrap();
         let priority = if tree.len() > 2 {

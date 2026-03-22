@@ -24,6 +24,7 @@ pub(crate) type GoTo = HashMap<(usize, Arc<Symbol>), usize>;
 pub(crate) type First = HashMap<Arc<Symbol>, HashSet<Arc<Symbol>>>;
 type ItemSetKey = Vec<(usize, usize, bool, String)>;
 
+/// Describes a parser table action for the CLR automaton.
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub enum ActionTable {
     Shift(usize),
@@ -42,6 +43,7 @@ impl ActionTable {
     }
 }
 
+/// Represents a CLR item with a lookahead symbol.
 #[derive(Eq, Hash, PartialEq, Debug)]
 pub(crate) struct Item {
     pub(crate) rule_id: usize,
@@ -117,6 +119,7 @@ pub(crate) fn get_last_symbol() -> Arc<Symbol> {
     terms!("$END")
 }
 
+/// Creates a stable comparison key for an item set.
 fn item_set_key(items: &ItemSet) -> ItemSetKey {
     let mut key = items
         .iter()
@@ -158,6 +161,7 @@ pub(crate) fn setup(
     (rules, mapped)
 }
 
+/// Canonical LR parser with precomputed ACTION and GOTO tables.
 pub struct Clr {
     parser_frontend: Arc<ParserFrontend>,
     #[allow(dead_code)]
@@ -175,6 +179,7 @@ impl Clr {
         let (rules, mapped) = setup(parser_frontend.clone(), non_terms!(parser_conf.start));
         let first = first_set(&rules);
 
+        #[cfg(feature = "debug")]
         if parser_conf.debug {
             debug_clr_rules(&rules);
             debug_first_set(&first);
@@ -191,6 +196,7 @@ impl Clr {
         };
         let (canonical_items, transitions) = canonical_items(&mut clr);
 
+        #[cfg(feature = "debug")]
         if clr.parser_conf.debug {
             debug_canonical_and_transtion_sets(&canonical_items, &transitions);
         }
@@ -336,7 +342,6 @@ impl Clr {
     ) -> Result<bool, ParserError> {
         let rule = self.rules.get(pos).unwrap();
 
-
         let mut children = Vec::with_capacity(rule.expansion.len());
         for _ in 0..rule.expansion.len() {
             stack_states.pop();
@@ -357,12 +362,12 @@ impl Clr {
         if rule.rule_option.is_expand() && children.len() == 1 {
             stack_symbols.push(children.pop().unwrap());
         } else if children.len() == 1
-            && let Some(AST::Tree(name,_)) = children.first()
+            && let Some(AST::Tree(name, _)) = children.first()
             && let Some(alias_rule) = rule.rule_option.alias_rule()
-            && alias_rule.contains(name) {
+            && alias_rule.contains(name)
+        {
             stack_symbols.push(children.pop().unwrap());
-        }
-        else {
+        } else {
             children.reverse();
             stack_symbols.push(AST::Tree(
                 rule.origin.as_ref().as_str().to_string(),
@@ -498,10 +503,8 @@ fn find_canonical_items(
                 .filter(|x1| x1.is_next_symbol(symbol))
                 .map(|x2| Arc::new(x2.move_dot().unwrap()))
                 .collect::<Vec<_>>();
-            let (next_canonical_item, next_list_of_next_symbols) = closure(
-                lr_parser,
-                moved_items.into_iter(),
-            );
+            let (next_canonical_item, next_list_of_next_symbols) =
+                closure(lr_parser, moved_items.into_iter());
             if next_canonical_item.is_empty() {
                 continue;
             }
@@ -592,8 +595,9 @@ pub(crate) fn first_set(rules: &[Arc<Rule>]) -> First {
 }
 
 // ---------------- CLR Debug ---------------- //
-#[inline]
 /// Prints numbered rules for debug tracing.
+#[cfg(feature = "debug")]
+#[inline]
 fn debug_clr_rules(rules: &[Arc<Rule>]) {
     println!("\nList of Rules in BNF format.");
     println!("============================");
@@ -604,6 +608,7 @@ fn debug_clr_rules(rules: &[Arc<Rule>]) {
     println!();
 }
 
+#[cfg(feature = "debug")]
 #[inline]
 /// Prints FIRST sets for debug tracing.
 fn debug_first_set(first: &First) {
@@ -621,8 +626,9 @@ fn debug_first_set(first: &First) {
     println!();
 }
 
-#[inline]
 /// Prints canonical items and transitions for debug tracing.
+#[cfg(feature = "debug")]
+#[inline]
 fn debug_canonical_and_transtion_sets(canonical_items: &VecItemSet, transitions: &GoTo) {
     println!("Canonical Items:");
     println!("================");

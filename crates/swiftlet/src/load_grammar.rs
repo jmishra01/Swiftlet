@@ -133,36 +133,50 @@ pub fn get_parser() -> Arc<ParserFrontend> {
 /// Parses grammar text and transforms it into a runnable parser frontend.
 ///
 /// Panics if grammar parsing or transformation fails.
-pub fn load_grammar(grammar: &str, parser_option: Arc<ParserOption>) -> Arc<ParserFrontend> {
-    let tree = match GRAMMAR_BUILDER.parse(grammar) {
-        Ok(tree) => tree,
-        Err(e) => panic!("Failed to parse grammar. Error: {}", e)
+
+macro_rules! impl_load_grammar {
+    ($( $extra_arg:ident : $extra_type:ty ),*) => {
+        /// Loads a grammar definition into a ready-to-use parser frontend.
+        pub fn load_grammar(grammar: &str, $( $extra_arg : $extra_type ),*) -> Arc<ParserFrontend> {
+            let tree = match GRAMMAR_BUILDER.parse(grammar) {
+                Ok(tree) => tree,
+                Err(e) => panic!("Failed to parse grammar. Error: {}", e)
+            };
+            $(
+                if $extra_arg.debug {
+                    println!("\nAST of Grammar");
+                    println!("==============");
+                    tree.pretty_print();
+                    println!();
+                }
+            )*
+
+            let mut transformer = Transformer::new(get_common_terminals());
+
+            transformer.transform(&tree);
+            transformer.sort_terminals();
+
+            let rules = transformer.get_grammar();
+            $(
+                if $extra_arg.debug {
+                    transformer.print_terminals();
+                    transformer.print_grammar();
+                }
+            )*
+
+            let parser_conf = Arc::new(ParserConf::new(rules, transformer.get_ignores()));
+            let lexer_conf = Arc::new(LexerConf::new(transformer.get_terminal()));
+
+            Arc::new(ParserFrontend::new(lexer_conf, parser_conf))
+        }
     };
-
-    if parser_option.debug {
-        println!("\nAST of Grammar");
-        println!("==============");
-        tree.pretty_print();
-        println!();
-    }
-
-    let mut transformer = Transformer::new(get_common_terminals());
-
-    transformer.transform(&tree);
-    transformer.sort_terminals();
-
-    let rules = transformer.get_grammar();
-
-    if parser_option.debug {
-        transformer.print_terminals();
-        transformer.print_grammar();
-    }
-
-    let parser_conf = Arc::new(ParserConf::new(rules, transformer.get_ignores()));
-    let lexer_conf = Arc::new(LexerConf::new(transformer.get_terminal()));
-
-    Arc::new(ParserFrontend::new(lexer_conf, parser_conf))
 }
+
+#[cfg(feature = "debug")]
+impl_load_grammar!(parser_option: Arc<ParserOption>);
+
+#[cfg(not(feature = "debug"))]
+impl_load_grammar!();
 
 #[cfg(test)]
 mod tests {

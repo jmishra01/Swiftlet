@@ -1,7 +1,7 @@
-use swiftlet::grammar::Algorithm;
-use swiftlet::{Swiftlet, ParserOption};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::sync::Arc;
+use swiftlet::grammar::Algorithm;
+use swiftlet::{ParserOption, Swiftlet};
 
 const GRAMMAR_AND_TEXT: [(&str, &str); 3] = [
     (

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "pyswiftlet"]
+members = ["crates/*", "swiftlet"]
 resolver = "3"
 
 

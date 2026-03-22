@@ -9,5 +9,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.28.2", features = ["extension-module"] }
-swiftlet = {workspace = true}
-chrono = {workspace = true}
+swiftlet = {workspace = true, features = ["debug"]}

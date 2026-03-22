@@ -76,6 +76,7 @@ pub enum Ambiguity {
     Explicit,
 }
 
+/// Configures parser construction and runtime behavior.
 #[derive(Debug, Clone)]
 pub struct ParserOption {
     pub start: String,
@@ -96,6 +97,7 @@ impl Default for ParserOption {
     }
 }
 
+/// High-level parser entry point built from a grammar definition.
 pub struct Swiftlet {
     grammar_builder: GrammarBuilder,
 }
@@ -103,16 +105,23 @@ pub struct Swiftlet {
 impl Swiftlet {
     /// Constructs a parser from grammar text.
     pub fn from_string(grammar: &str, parser_option: Arc<ParserOption>) -> Self {
+        #[cfg(feature = "debug")]
         let _grammar = load_grammar(grammar, parser_option.clone());
-        Self { grammar_builder: GrammarBuilder::new(_grammar, parser_option.clone()) }
+
+        #[cfg(not(feature = "debug"))]
+        let _grammar = load_grammar(grammar);
+
+        Self {
+            grammar_builder: GrammarBuilder::new(_grammar, parser_option.clone()),
+        }
     }
 
     /// Constructs a parser from a grammar file path.
     ///
     /// Panics if the file cannot be read.
-    pub fn from_file(file: String, parser_conf: Arc<ParserOption>) -> Self {
+    pub fn from_file(file: String, parser_option: Arc<ParserOption>) -> Self {
         let content = std::fs::read_to_string(file).unwrap();
-        Self::from_string(content.as_str(), parser_conf)
+        Self::from_string(content.as_str(), parser_option)
     }
 
     /// Parses the provided input text and returns the generated AST.
@@ -124,7 +133,7 @@ impl Swiftlet {
 #[cfg(test)]
 mod tests {
     use crate::grammar::Algorithm;
-    use crate::{Ambiguity, Swiftlet, ParserOption};
+    use crate::{Ambiguity, ParserOption, Swiftlet};
     use std::fs;
     use std::sync::Arc;
 

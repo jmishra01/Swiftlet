@@ -1,47 +1,18 @@
-use swiftlet::{Swiftlet, ParserOption, lexer::AST};
 use std::sync::Arc;
-use std::time::Instant;
 use swiftlet::grammar::Algorithm;
+use swiftlet::{ParserOption, Swiftlet, lexer::AST};
 
-
-struct Transformer;
-
-impl Transformer {
-    fn start(&self, children: &[AST]) -> i64 {
-        self.transform(&children[0])
-    }
-
-    fn add(&self, children: &[AST]) -> i64 {
-        self.transform(&children[0]) + self.transform(&children[2])
-    }
-
-    fn sub(&self, children: &[AST]) -> i64 {
-        self.transform(&children[0]) - self.transform(&children[2])
-    }
-
-    fn mul(&self, children: &[AST]) -> i64 {
-        self.transform(&children[0]) * self.transform(&children[2])
-    }
-
-    fn div(&self, children: &[AST]) -> i64 {
-        self.transform(&children[0]) / self.transform(&children[2])
-    }
-
-    fn transform(&self, ast: &AST) -> i64 {
-        match ast {
-            AST::Token(token) => token.word().parse::<i64>().unwrap(),
-            AST::Tree(rule, children) => {
-                match rule.as_str() {
-                    "start" | "expr" | "term" => self.start(children),
-                    "add" => self.add(children),
-                    "sub" => self.sub(children),
-                    "mul" => self.mul(children),
-                    "div" => self.div(children),
-                    _ => panic!("{} Rule not found in the AST tree", rule),
-                }
-            }
-
-        }
+fn calculate(ast: &AST) -> i64 {
+    match ast {
+        AST::Token(token) => token.word().parse::<i64>().unwrap(),
+        AST::Tree(rule, children) => match rule.as_str() {
+            "start" | "expr" | "term" => calculate(&children[0]),
+            "add" => calculate(&children[0]) + calculate(&children[2]),
+            "sub" => calculate(&children[0]) - calculate(&children[2]),
+            "mul" => calculate(&children[0]) * calculate(&children[2]),
+            "div" => calculate(&children[0]) / calculate(&children[2]),
+            _ => panic!("{} Rule not found in the AST tree", rule),
+        },
     }
 }
 
@@ -60,17 +31,19 @@ fn main() {
 
     let text = "10 * 5 - 8 / 2 + 20";
 
-    let conf = Arc::new(ParserOption {algorithm: Algorithm::CLR, ..Default::default()});
+    let conf = Arc::new(ParserOption {
+        algorithm: Algorithm::CLR,
+        debug: true,
+        ..Default::default()
+    });
     let parser = Swiftlet::from_string(grammar, conf);
     let parsed_text = parser.parse(&text);
 
-    let transformer = Transformer{};
-
-    match  parsed_text{
+    match parsed_text {
         Ok(tree) => {
-            println!("AST");
+            tree.print();
             tree.pretty_print();
-            println!("Total: {}", transformer.transform(&tree));
+            println!("Total: {}", calculate(&tree));
         }
         Err(e) => {
             println!("Error: {}", e);

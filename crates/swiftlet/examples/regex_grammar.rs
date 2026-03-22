@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use swiftlet::grammar::Algorithm;
-use swiftlet::{Swiftlet, ParserOption};
+use swiftlet::{ParserOption, Swiftlet};
 
 fn main() {
     let text = r#"

@@ -5,6 +5,7 @@ use crate::parser::{Parser, clr::Clr, earley::EarleyParser, error::ParserError};
 use crate::parser_frontends::ParserFrontend;
 use std::sync::Arc;
 
+/// Builds and executes the concrete parser selected by [`ParserOption`].
 pub struct GrammarBuilder {
     parser: Box<dyn Parser + Send + Sync>,
 }
@@ -19,9 +20,6 @@ impl GrammarBuilder {
             Algorithm::CLR => Self {
                 parser: Box::new(Clr::new(parser_frontend, parser_conf)),
             },
-            _ => {
-                panic!("{:?} not implemented yet", parser_conf.algorithm)
-            }
         }
     }
 

@@ -1,17 +1,22 @@
 use std::sync::Arc;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserOption, Swiftlet, grammar::Algorithm};
 
 fn main() {
     let grammar = r#"
-    start: hello world
-    hello: "hello"
-    world: "world"
-    %ignore " "
+    start: expr
+    expr: expr "+" number | number
+    number: DECIMAL | INT
+    %import (INT, WS, DECIMAL)
+    %ignore WS
     "#;
 
-    let text = "hello world";
+    let text = "12.34 + 10";
 
-    let conf = Arc::new(ParserOption::default());
+    let conf = Arc::new(ParserOption {
+        algorithm: Algorithm::CLR,
+        debug: true,
+        ..Default::default()
+    });
     let parser = Swiftlet::from_string(grammar, conf);
     match parser.parse(&text) {
         Ok(ast) => {

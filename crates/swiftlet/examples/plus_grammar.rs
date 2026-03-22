@@ -1,6 +1,6 @@
-use swiftlet::lexer::AST;
-use swiftlet::{Swiftlet, ParserOption};
 use std::sync::Arc;
+use swiftlet::lexer::AST;
+use swiftlet::{ParserOption, Swiftlet};
 
 fn transform(ast: &AST) -> Option<i32> {
     match ast {

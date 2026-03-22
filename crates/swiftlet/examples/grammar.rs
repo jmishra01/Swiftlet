@@ -1,7 +1,7 @@
-use swiftlet::grammar::Algorithm;
-use swiftlet::{Swiftlet, ParserOption};
 use std::sync::Arc;
 use std::time::Instant;
+use swiftlet::grammar::Algorithm;
+use swiftlet::{ParserOption, Swiftlet};
 
 fn main() {
     let t1 = Instant::now();

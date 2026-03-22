@@ -1,5 +1,5 @@
-use swiftlet::{Swiftlet, ParserOption};
 use std::sync::Arc;
+use swiftlet::{ParserOption, Swiftlet};
 
 fn main() {
     let grammar = r#"
@@ -15,8 +15,7 @@ fn main() {
         Ok(ast) => {
             ast.print()
             // Output: Tree("start", [Tree("number", ["123"]), "+", Tree("number", ["456"])])
-        },
+        }
         Err(err) => eprintln!("{}", err),
     }
-
 }

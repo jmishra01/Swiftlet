@@ -4,6 +4,7 @@ use indexmap::IndexSet;
 use std::sync::Arc;
 use thiserror::Error;
 
+/// Enumerates parser construction and runtime failures.
 #[derive(Debug, Error)]
 pub enum ParserError {
     #[error("LR Table: {lr_table:?}\n{conflict} conflict.")]

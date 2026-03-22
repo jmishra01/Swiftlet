@@ -1,8 +1,8 @@
-use swiftlet::grammar::Algorithm;
-use swiftlet::{Swiftlet, ParserOption};
 use std::env;
 use std::sync::Arc;
 use std::time::Instant;
+use swiftlet::grammar::Algorithm;
+use swiftlet::{ParserOption, Swiftlet};
 
 fn grammar() -> &'static str {
     r#"
@@ -34,7 +34,6 @@ fn make_parser_option(algorithm: &str) -> Arc<ParserOption> {
     let algorithm = match algorithm {
         "earley" => Algorithm::Earley,
         "clr" => Algorithm::CLR,
-        "lalr" => Algorithm::LALR,
         other => panic!("unsupported algorithm: {other}"),
     };
 
@@ -83,7 +82,10 @@ fn median(values: &[f64]) -> f64 {
 }
 
 fn format_stats(name: &str, samples: &[f64]) -> String {
-    let converted = samples.iter().map(|sample| sample * 1000.0).collect::<Vec<_>>();
+    let converted = samples
+        .iter()
+        .map(|sample| sample * 1000.0)
+        .collect::<Vec<_>>();
     format!(
         "{name}: mean={:.3}ms, median={:.3}ms, min={:.3}ms, max={:.3}ms",
         mean(&converted),
@@ -137,7 +139,10 @@ fn main() {
     println!("algorithm={algorithm}");
     println!("rounds={rounds}");
     println!("input_tokens={}", text.split_whitespace().count());
-    println!("{}", format_stats("construct", constructor_samples.as_slice()));
+    println!(
+        "{}",
+        format_stats("construct", constructor_samples.as_slice())
+    );
     println!("{}", format_stats("parse", parse_samples.as_slice()));
     println!("parse_ops_per_sec={parse_ops_per_sec:.2}");
 }

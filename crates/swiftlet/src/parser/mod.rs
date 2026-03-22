@@ -8,6 +8,7 @@ pub mod earley;
 pub mod error;
 mod utils;
 
+/// Common interface implemented by concrete parser backends.
 pub trait Parser {
     /// Returns parser frontend containing lexer and grammar configuration.
     fn get_parser_frontend(&self) -> Arc<ParserFrontend>;

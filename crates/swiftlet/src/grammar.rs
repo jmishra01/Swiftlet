@@ -4,24 +4,28 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 
+/// Selects the parsing algorithm used to build the parser.
 #[derive(Clone, Debug)]
 pub enum Algorithm {
     Earley,
     CLR,
-    LALR,
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Default)]
 pub(crate) struct RuleOption {
     expand: bool,
     priority: usize,
-    alias_rule: Option<Vec<String>>
+    alias_rule: Option<Vec<String>>,
 }
 
 impl RuleOption {
     /// Creates rule metadata with expand flag and precedence priority.
     pub(crate) fn new(expand: bool, priority: usize, alias_rule: Option<Vec<String>>) -> Self {
-        Self { expand, priority, alias_rule }
+        Self {
+            expand,
+            priority,
+            alias_rule,
+        }
     }
 
     /// Returns whether this rule should be expanded (flattened) in tree building.
@@ -39,6 +43,7 @@ impl RuleOption {
     }
 }
 
+/// Represents a single grammar production.
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub struct Rule {
     pub(crate) origin: Arc<Symbol>,

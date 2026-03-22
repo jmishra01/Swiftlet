@@ -1,7 +1,7 @@
+use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
 use swiftlet::lexer::{AST, Symbol, Token};
-use swiftlet::{Swiftlet, ParserOption};
-use std::sync::Arc;
+use swiftlet::{ParserOption, Swiftlet};
 
 #[test]
 fn plus_int_grammar_clr_test() {
@@ -15,7 +15,7 @@ fn plus_int_grammar_clr_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let mut parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf);
     let ast = parser.parse("1+2");
 
     let right = AST::Tree(
@@ -67,7 +67,7 @@ fn plus_int_rule_grammar_clr_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let mut parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf);
     let ast = parser.parse("1 + 2");
 
     let right = AST::Tree(
@@ -123,7 +123,7 @@ fn plus_int_grammar_earley_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let mut parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf);
     let ast = parser.parse("1+2");
 
     let right = AST::Tree(

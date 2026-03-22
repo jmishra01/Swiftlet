@@ -3,6 +3,7 @@ use crate::lexer::{LexerConf, Symbol, Tokenizer};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+/// Stores grammar rules, ignore directives, and cached rule expansions.
 #[derive(Debug)]
 pub struct ParserConf {
     rules: HashMap<Arc<Symbol>, Vec<Arc<Rule>>>,
@@ -60,6 +61,7 @@ impl ParserConf {
     }
 }
 
+/// Bundles lexer and parser configuration for a compiled grammar.
 #[derive(Debug)]
 pub struct ParserFrontend {
     lexer: Arc<LexerConf>,
@@ -74,7 +76,8 @@ impl ParserFrontend {
 
     /// Returns a tokenizer for `text` using cached ignored terminal symbols.
     pub(crate) fn tokenizer(&self, text: &str) -> Tokenizer {
-        self.lexer.tokenize(text, self.parser.get_ignore_symbols().clone())
+        self.lexer
+            .tokenize(text, self.parser.get_ignore_symbols().clone())
     }
 
     /// Returns the lexer configuration.
@@ -126,7 +129,10 @@ mod tests {
 
         assert!(pc.contains_rule(&start));
         assert!(pc.contains_rule(&expr));
-        assert!(pc.get_ignore_symbols().contains(&Arc::new(Symbol::Terminal("WS".to_string()))));
+        assert!(
+            pc.get_ignore_symbols()
+                .contains(&Arc::new(Symbol::Terminal("WS".to_string())))
+        );
         assert_eq!(pc.next_expansion(&expr).count(), 1);
         assert_eq!(pc.get_all_expansion().len(), 2);
         assert_eq!(pc.get_expansion(&expr).unwrap().len(), 1);

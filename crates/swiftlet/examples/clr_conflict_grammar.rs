@@ -1,5 +1,5 @@
-use swiftlet::{Ambiguity, Swiftlet, ParserOption};
 use std::sync::Arc;
+use swiftlet::{Ambiguity, ParserOption, Swiftlet};
 fn main() {
     let grammar = r#"
     s: e
