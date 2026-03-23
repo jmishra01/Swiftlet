@@ -2,9 +2,11 @@ use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Mutex};
-use swiftlet::grammar::Algorithm as RustAlgorithm;
-use swiftlet::lexer::AST;
-use swiftlet::{Ambiguity as RustAmbiguity, ParserOption, Swiftlet as RustSwiftlet};
+use swiftlet::{grammar::Algorithm as RustAlgorithm,
+               ast::AST,
+               Ambiguity as RustAmbiguity,
+               ParserOption,
+               Swiftlet as RustSwiftlet};
 
 /// Parses the Python-facing algorithm name into the Rust enum.
 fn parse_algorithm(value: &str) -> PyResult<RustAlgorithm> {

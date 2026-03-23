@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
-use swiftlet::lexer::{AST, Symbol, Token};
+use swiftlet::lexer::{Symbol, Token};
+use swiftlet::ast::AST;
 use swiftlet::{ParserOption, Swiftlet};
 
 #[test]

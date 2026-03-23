@@ -2,7 +2,8 @@ use crate::parser::error::ParserError;
 use crate::{
     ParserOption,
     grammar::{Rule, RuleOption},
-    lexer::{AST, Symbol, Token, Tokenizer},
+    lexer::{Symbol, Token, Tokenizer},
+    ast::AST,
     non_terms,
     parser::Parser,
     parser::utils::dot_state,
@@ -401,7 +402,7 @@ impl Parser for Clr {
         loop {
             let state = *stack_states.last().unwrap();
             if let Some(lr_table) = self.action.get(&(state, lookahead.terminal.clone())) {
-                // Check Conflict SR & RR
+                // Check SR & RR conflict
                 match self.get_next_action(lr_table) {
                     Ok(action) => match action {
                         ActionTable::Accepted => break,

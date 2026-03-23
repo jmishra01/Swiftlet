@@ -47,35 +47,14 @@ harness = false
 name = "benchmark"
 harness = false
 
-[[example]]
-name = "range_grammar"
-
-[[example]]
-name = "grammar"
-
-[[example]]
-name = "grammar_test"
-
-[[example]]
-name = "grammar_testing"
-
-[[example]]
-name = "grammar_testing_slr"
-
-[[example]]
-name = "math"
-
-[[example]]
-name = "symbol_priority"
-
-[[test]]
-name = "simple_grammar"
-path = "tests/simple_grammar_test.rs"
-
-[[test]]
-name = "plus_int_grammar"
-path = "tests/plus_int_grammar_test.rs"
-
-[[test]]
-name = "rule_feature_in_grammar_test"
-path = "tests/rule_feature_in_grammar_test.rs"
+#[[test]]
+#name = "simple_grammar"
+#path = "tests/simple_grammar_test.rs"
+#
+#[[test]]
+#name = "plus_int_grammar"
+#path = "tests/plus_int_grammar_test.rs"
+#
+#[[test]]
+#name = "rule_feature_in_grammar_test"
+#path = "tests/rule_feature_in_grammar_test.rs"

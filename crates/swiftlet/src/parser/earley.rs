@@ -1,5 +1,6 @@
 use crate::grammar::{Rule, RuleOption};
-use crate::lexer::{AST, Symbol, Token, Tokenizer};
+use crate::lexer::{Symbol, Token, Tokenizer};
+use crate::ast::AST;
 use crate::parser::Parser;
 use crate::parser::error::ParserError;
 use crate::parser::utils::dot_state;

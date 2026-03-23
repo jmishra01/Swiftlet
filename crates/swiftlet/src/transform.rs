@@ -1,5 +1,6 @@
 use crate::grammar::{Rule, RuleOption};
-use crate::lexer::{AST, RegexFlag, Symbol, TerminalDef, get_symbol};
+use crate::lexer::{RegexFlag, Symbol, TerminalDef, get_symbol};
+use crate::ast::AST;
 use crate::{terminal_def, terms};
 use fancy_regex::Regex;
 use std::collections::HashMap;

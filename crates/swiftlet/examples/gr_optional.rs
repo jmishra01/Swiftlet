@@ -6,9 +6,10 @@ fn main() {
     start: hello world
     hello: "hello"
     world: "world"
+    name: /\w+/
     "#;
 
-    let text = "hello";
+    let text = "helloworld";
 
     let conf = Arc::new(ParserOption::default());
     let parser = Swiftlet::from_string(grammar, conf);
@@ -17,6 +18,6 @@ fn main() {
             ast.print()
             // Output: Tree("start", [Tree("hello", ["hello"]), Tree("world", ["world"])])
         }
-        Err(err) => eprintln!("{}", err),
+        Err(err) => eprintln!("=> {}", err),
     }
 }

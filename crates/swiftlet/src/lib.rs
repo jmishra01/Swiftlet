@@ -58,10 +58,11 @@ mod macros;
 pub mod parser;
 pub mod parser_frontends;
 mod transform;
+pub mod ast;
 
 pub use crate::builder::GrammarBuilder;
 use crate::grammar::Algorithm;
-use crate::lexer::AST;
+use crate::ast::AST;
 use crate::load_grammar::load_grammar;
 use crate::parser::error::ParserError;
 use std::sync::Arc;

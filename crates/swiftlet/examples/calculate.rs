@@ -1,6 +1,7 @@
 use std::sync::Arc;
+use swiftlet::ast::AST;
 use swiftlet::grammar::Algorithm;
-use swiftlet::{ParserOption, Swiftlet, lexer::AST};
+use swiftlet::{ParserOption, Swiftlet};
 
 fn calculate(ast: &AST) -> i64 {
     match ast {

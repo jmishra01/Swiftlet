@@ -2,18 +2,13 @@
 from lark import Lark
 
 grammar = """
-start: expr
-expr: select_stmt columns
-select_stmt: "SELECT"i
-columns: name ("," name)*
-name: CNAME
-
-%import common.CNAME
+start: hello WS world
+hello: "hello"
+world: "word"
 %import common.WS
-%ignore WS
 """
 
-parser = Lark(grammar, parser='lalr')
+parser = Lark(grammar, parser='earley')
 
-parsed  = parser.parse("SELECT hello, world")
+parsed  = parser.parse("helloword")
 print(parsed.pretty())

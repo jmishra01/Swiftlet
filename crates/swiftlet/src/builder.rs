@@ -1,6 +1,7 @@
 use crate::ParserOption;
 use crate::grammar::Algorithm;
-use crate::lexer::{AST, Tokenizer};
+use crate::lexer::Tokenizer;
+use crate::ast::AST;
 use crate::parser::{Parser, clr::Clr, earley::EarleyParser, error::ParserError};
 use crate::parser_frontends::ParserFrontend;
 use std::sync::Arc;
