@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn builder_get_tokens_and_parse_with_earley() {
         let parser_opt = Arc::new(ParserOption::default());
-        let parser_frontend = load_grammar(grammar_text(), parser_opt.clone());
+        let parser_frontend = load_grammar(grammar_text());
         let builder = GrammarBuilder::new(parser_frontend, parser_opt);
 
         let mut tokenizer = builder.get_tokens("123");
@@ -67,7 +67,7 @@ mod tests {
             algorithm: Algorithm::CLR,
             ..ParserOption::default()
         });
-        let parser_frontend = load_grammar(grammar_text(), parser_opt.clone());
+        let parser_frontend = load_grammar(grammar_text());
         let builder = GrammarBuilder::new(parser_frontend, parser_opt);
 
         assert!(builder.parse("42").is_ok());

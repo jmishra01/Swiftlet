@@ -16,6 +16,6 @@ pub enum ParserError {
     TransitionError(Arc<Symbol>),
     #[error("Failed to parser input text: \"{0}\"")]
     FailedToParse(String),
-    #[error("Didn't find any rule for word: {0} in the given grammar.")]
+    #[error("Didn't find any rule for word: \"{0}\" in the given grammar.")]
     RuleNotFound(String),
 }

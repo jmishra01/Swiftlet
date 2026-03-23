@@ -265,7 +265,7 @@ impl Parser for EarleyParser {
         let mut i = 0;
 
         #[cfg(feature = "debug")]
-        {
+        if self.parser_config.debug {
             println!("\nEarley Parser");
             println!("=============");
         }
@@ -374,7 +374,7 @@ mod tests {
         a: "x" | "x"
         "#;
         let parser_opt = Arc::new(ParserOption::default());
-        let pf = load_grammar(grammar, parser_opt.clone());
+        let pf = load_grammar(grammar);
         let earley = EarleyParser::new(pf.clone(), parser_opt);
         let tk = pf.tokenizer("x");
         assert!(earley.parse(tk).is_ok());
@@ -384,7 +384,7 @@ mod tests {
             ambiguity: Ambiguity::Explicit,
             ..ParserOption::default()
         });
-        let explicit_pf = load_grammar(grammar, explicit_opt.clone());
+        let explicit_pf = load_grammar(grammar);
         let explicit = EarleyParser::new(explicit_pf.clone(), explicit_opt);
         let ast = explicit.parse(explicit_pf.tokenizer("x")).unwrap();
         assert_eq!(ast.get_tree_name(), Some(&"_ambiguity".to_string()));
