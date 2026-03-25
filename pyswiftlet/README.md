@@ -15,13 +15,7 @@ It accepts an EBNF-style grammar and parses input text into a tree of `Tree` and
 Build and install the package from the `swiftlet` directory:
 
 ```bash
-pip install .
-```
-
-If you are developing the bindings locally, `maturin` also works:
-
-```bash
-maturin develop
+pip install swiftlet
 ```
 
 ## Example
