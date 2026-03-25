@@ -347,6 +347,16 @@ mod tests {
     use crate::grammar::Algorithm;
     use crate::load_grammar::load_grammar;
 
+    #[cfg(feature = "debug")]
+    fn test_frontend(grammar: &str, parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
+        load_grammar(grammar, parser_opt)
+    }
+
+    #[cfg(not(feature = "debug"))]
+    fn test_frontend(grammar: &str, _parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
+        load_grammar(grammar)
+    }
+
     #[test]
     fn state_core_methods_and_display_work() {
         let rule = Arc::new(Rule::new(
@@ -375,7 +385,7 @@ mod tests {
         a: "x" | "x"
         "#;
         let parser_opt = Arc::new(ParserOption::default());
-        let pf = load_grammar(grammar);
+        let pf = test_frontend(grammar, parser_opt.clone());
         let earley = EarleyParser::new(pf.clone(), parser_opt);
         let tk = pf.tokenizer("x");
         assert!(earley.parse(tk).is_ok());
@@ -385,7 +395,7 @@ mod tests {
             ambiguity: Ambiguity::Explicit,
             ..ParserOption::default()
         });
-        let explicit_pf = load_grammar(grammar);
+        let explicit_pf = test_frontend(grammar, explicit_opt.clone());
         let explicit = EarleyParser::new(explicit_pf.clone(), explicit_opt);
         let ast = explicit.parse(explicit_pf.tokenizer("x")).unwrap();
         assert_eq!(ast.get_tree_name(), Some(&"_ambiguity".to_string()));

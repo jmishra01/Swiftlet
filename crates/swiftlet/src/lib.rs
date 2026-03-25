@@ -2,7 +2,7 @@
 //!
 //! # Example
 //! ```
-//! use swiftlet::{Swiftlet, ParserOption, lexer::AST};
+//! use swiftlet::{Swiftlet, ParserOption, ast::AST};
 //! use std::sync::Arc;
 //!
 //!

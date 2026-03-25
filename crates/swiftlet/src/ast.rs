@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use crate::lexer::{Symbol, Token};
+use crate::lexer::Token;
 
 /// Represents either a token leaf or a named tree node in the parse result.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -166,6 +166,7 @@ fn pretty_print(tree: &AST, space: String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lexer::Symbol;
     #[test]
     fn ast_helpers_work_for_tree_and_token() {
         let tok = Arc::new(Token::new(

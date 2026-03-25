@@ -116,11 +116,12 @@ pub struct TerminalDef {
     pub(crate) value: String,
     pub(crate) pattern: Pattern,
     pub(crate) max_width: usize,
+    pub(crate) priority: usize
 }
 
 impl TerminalDef {
     /// Creates a literal-string terminal definition.
-    pub(crate) fn with_string(name: &str, value: &str) -> Self {
+    pub(crate) fn with_string(name: &str, value: &str, priority: usize) -> Self {
         let name = Arc::new(Symbol::Terminal(name.to_string()));
 
         Self {
@@ -128,11 +129,12 @@ impl TerminalDef {
             value: value.to_string(),
             pattern: Pattern::PatternStr(value.to_string()),
             max_width: value.len(),
+            priority
         }
     }
 
     /// Creates a regex-based terminal definition using the provided flags.
-    pub(crate) fn with_regex(name: &str, value: &str, regex_flag: RegexFlag) -> Self {
+    pub(crate) fn with_regex(name: &str, value: &str, regex_flag: RegexFlag, priority: usize) -> Self {
         let name = Arc::new(Symbol::Terminal(name.to_string()));
         let (pattern, max_width) = {
             let rb = RegexBuilder::new((r"^".to_string() + value).as_str())
@@ -157,6 +159,7 @@ impl TerminalDef {
             value: value.to_string(),
             pattern,
             max_width,
+            priority
         }
     }
 
@@ -368,7 +371,7 @@ pub fn get_symbol(word: &str) -> Arc<Symbol> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn symbol_helpers_work() {
         let t = Symbol::Terminal("INT".to_string());
@@ -392,8 +395,8 @@ mod tests {
 
     #[test]
     fn terminal_def_with_string_and_regex_capture() {
-        let st = TerminalDef::with_string("PLUS", "+");
-        let rg = TerminalDef::with_regex("INT", r"\d+", RegexFlag::default());
+        let st = TerminalDef::with_string("PLUS", "+", 0);
+        let rg = TerminalDef::with_regex("INT", r"\d+", RegexFlag::default(), 0);
 
         assert_eq!(st.get_name().as_ref().as_str(), "PLUS");
         assert_eq!(st.capture("+1").unwrap().0, 1);
@@ -418,9 +421,9 @@ mod tests {
     #[test]
     fn tokenizer_and_lexer_conf_tokenize_with_ignore() {
         let terminals = vec![
-            Arc::new(TerminalDef::with_regex("_NL", r"\n+", RegexFlag::default())),
-            Arc::new(TerminalDef::with_regex("WS", r"[ ]+", RegexFlag::default())),
-            Arc::new(TerminalDef::with_regex("INT", r"\d+", RegexFlag::default())),
+            Arc::new(TerminalDef::with_regex("_NL", r"\n+", RegexFlag::default(), 0)),
+            Arc::new(TerminalDef::with_regex("WS", r"[ ]+", RegexFlag::default(), 0)),
+            Arc::new(TerminalDef::with_regex("INT", r"\d+", RegexFlag::default(), 0)),
         ];
 
         let lexer = LexerConf::new(terminals);
@@ -449,7 +452,7 @@ mod tests {
 
     #[test]
     fn tokenizer_panics_on_unmatched_input() {
-        let terminals = vec![Arc::new(TerminalDef::with_string("A", "a"))];
+        let terminals = vec![Arc::new(TerminalDef::with_string("A", "a", 0))];
         let mut tokenizer =
             Tokenizer::new(Arc::<str>::from("x"), &terminals, Arc::new(HashSet::new()));
         let panicked = std::panic::catch_unwind(move || {

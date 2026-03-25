@@ -42,6 +42,16 @@ mod tests {
     use crate::load_grammar::load_grammar;
     use std::sync::Arc;
 
+    #[cfg(feature = "debug")]
+    fn test_frontend(grammar: &str, parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
+        load_grammar(grammar, parser_opt)
+    }
+
+    #[cfg(not(feature = "debug"))]
+    fn test_frontend(grammar: &str, _parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
+        load_grammar(grammar)
+    }
+
     fn grammar_text() -> &'static str {
         r#"
         start: expr
@@ -54,7 +64,7 @@ mod tests {
     #[test]
     fn builder_get_tokens_and_parse_with_earley() {
         let parser_opt = Arc::new(ParserOption::default());
-        let parser_frontend = load_grammar(grammar_text());
+        let parser_frontend = test_frontend(grammar_text(), parser_opt.clone());
         let builder = GrammarBuilder::new(parser_frontend, parser_opt);
 
         let mut tokenizer = builder.get_tokens("123");
@@ -68,7 +78,7 @@ mod tests {
             algorithm: Algorithm::CLR,
             ..ParserOption::default()
         });
-        let parser_frontend = load_grammar(grammar_text());
+        let parser_frontend = test_frontend(grammar_text(), parser_opt.clone());
         let builder = GrammarBuilder::new(parser_frontend, parser_opt);
 
         assert!(builder.parse("42").is_ok());

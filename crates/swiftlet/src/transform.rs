@@ -65,13 +65,12 @@ impl Transformer {
     /// Sorts terminals by descending max width for longest-match behavior.
     pub(crate) fn sort_terminals(&mut self) {
         self.terminal.sort_by(|a, b| {
-            let order = b.max_width.cmp(&a.max_width);
-            if order.is_eq() {
-                b.value.len().cmp(&a.value.len())
-            } else {
-                order
-            }
-        });
+            b.priority.cmp(&a.priority)
+                .then(
+                    b.max_width.cmp(&a.max_width)
+                        .then(b.value.len().cmp(&a.value.len())))
+        }
+        );
     }
 
     /// Returns generated terminals.
@@ -287,12 +286,14 @@ impl Transformer {
                 value: val.value.clone(),
                 pattern: val.pattern.clone(),
                 max_width: val.max_width,
+                priority: 10,
             }));
         } else {
             self.terminal.push(terminal_def!(
                 rule_name.unwrap().first().unwrap(),
                 prod.first().unwrap(),
-                RegexFlag::default()
+                RegexFlag::default(),
+                10
             ));
         }
 
@@ -332,7 +333,7 @@ impl Transformer {
         } else {
             word.strip_suffix("\"")?
         };
-        let terminal_name = format!("__STR__{}__1", word.to_uppercase());
+        let terminal_name = word.to_uppercase();
 
         if is_case_insensitive {
             self.terminal.push(terminal_def!(
@@ -341,11 +342,12 @@ impl Transformer {
                 RegexFlag {
                     i: is_case_insensitive,
                     ..Default::default()
-                }
+                },
+                10
             ));
         } else {
             self.terminal
-                .push(terminal_def!(terminal_name.as_str(), word));
+                .push(terminal_def!(terminal_name.as_str(), word, 1));
         }
 
         Some(vec![terminal_name])
@@ -479,7 +481,7 @@ impl Transformer {
         let terminal_name = format!("__PATTERN__{}__1", pattern.to_uppercase());
 
         self.terminal
-            .push(terminal_def!(terminal_name.as_str(), pattern, regex_flag));
+            .push(terminal_def!(terminal_name.as_str(), pattern, regex_flag, 0));
 
         Some(vec![terminal_name])
     }

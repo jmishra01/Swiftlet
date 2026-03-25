@@ -28,21 +28,21 @@ fn option_rule_clr_test() {
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "i".to_string(),
+                        "ii".to_string(),
                         0,
-                        2,
+                        1,
                         0,
-                        Arc::new(Symbol::Terminal("__STR__I__1".to_string())),
+                        Arc::new(Symbol::Terminal("I".to_string())),
                     )))],
                 ),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "i".to_string(),
+                        "ii".to_string(),
                         1,
                         2,
                         0,
-                        Arc::new(Symbol::Terminal("__STR__I__1".to_string())),
+                        Arc::new(Symbol::Terminal("I".to_string())),
                     )))],
                 ),
             ],
@@ -73,21 +73,21 @@ fn option_rule_earley_test() {
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "i".to_string(),
+                        "ii",
                         0,
-                        2,
+                        1,
                         0,
-                        Arc::new(Symbol::Terminal("__STR__I__1".to_string())),
+                        Arc::new(Symbol::Terminal("I".to_string())),
                     )))],
                 ),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "i".to_string(),
+                        "ii",
                         1,
                         2,
                         0,
-                        Arc::new(Symbol::Terminal("__STR__I__1".to_string())),
+                        Arc::new(Symbol::Terminal("I".to_string())),
                     )))],
                 ),
             ],
@@ -128,7 +128,7 @@ fn optional_expr_operation_clr_test() {
                             vec![AST::Tree(
                                 "t".to_string(),
                                 vec![AST::Token(Arc::new(Token::new(
-                                    "1".to_string(),
+                                    "1 + 2 + 3",
                                     0,
                                     1,
                                     0,
@@ -137,16 +137,16 @@ fn optional_expr_operation_clr_test() {
                             )],
                         ),
                         AST::Token(Arc::new(Token::new(
-                            "+".to_string(),
+                            "1 + 2 + 3".to_string(),
                             2,
-                            9,
+                            3,
                             0,
-                            Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                            Arc::new(Symbol::Terminal("+".to_string())),
                         ))),
                         AST::Tree(
                             "t".to_string(),
                             vec![AST::Token(Arc::new(Token::new(
-                                "2".to_string(),
+                                "1 + 2 + 3",
                                 4,
                                 5,
                                 0,
@@ -156,16 +156,16 @@ fn optional_expr_operation_clr_test() {
                     ],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "+".to_string(),
+                    "1 + 2 + 3",
                     6,
-                    9,
+                    7,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                    Arc::new(Symbol::Terminal("+".to_string())),
                 ))),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "3".to_string(),
+                        "1 + 2 + 3",
                         8,
                         9,
                         0,
@@ -208,7 +208,7 @@ fn optional_expr_operation_earley_test() {
                             vec![AST::Tree(
                                 "t".to_string(),
                                 vec![AST::Token(Arc::new(Token::new(
-                                    "1".to_string(),
+                                    "1+2+3",
                                     0,
                                     1,
                                     0,
@@ -217,16 +217,16 @@ fn optional_expr_operation_earley_test() {
                             )],
                         ),
                         AST::Token(Arc::new(Token::new(
-                            "+".to_string(),
+                            "1+2+3",
                             1,
-                            5,
+                            2,
                             0,
-                            Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                            Arc::new(Symbol::Terminal("+".to_string())),
                         ))),
                         AST::Tree(
                             "t".to_string(),
                             vec![AST::Token(Arc::new(Token::new(
-                                "2".to_string(),
+                                "1+2+3",
                                 2,
                                 3,
                                 0,
@@ -236,16 +236,16 @@ fn optional_expr_operation_earley_test() {
                     ],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "+".to_string(),
+                    "1+2+3",
                     3,
-                    5,
+                    4,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                    Arc::new(Symbol::Terminal("+".to_string())),
                 ))),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "3".to_string(),
+                        "1+2+3",
                         4,
                         5,
                         0,
@@ -288,7 +288,7 @@ fn question_rule_and_operation_clr_test() {
                         AST::Tree(
                             "t".to_string(),
                             vec![AST::Token(Arc::new(Token::new(
-                                "1".to_string(),
+                                "1 + 2 + 3",
                                 0,
                                 1,
                                 0,
@@ -296,16 +296,16 @@ fn question_rule_and_operation_clr_test() {
                             )))],
                         ),
                         AST::Token(Arc::new(Token::new(
-                            "+".to_string(),
+                            "1 + 2 + 3",
                             2,
-                            9,
+                            3,
                             0,
-                            Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                            Arc::new(Symbol::Terminal("+".to_string())),
                         ))),
                         AST::Tree(
                             "t".to_string(),
                             vec![AST::Token(Arc::new(Token::new(
-                                "2".to_string(),
+                                "1 + 2 + 3",
                                 4,
                                 5,
                                 0,
@@ -315,16 +315,16 @@ fn question_rule_and_operation_clr_test() {
                     ],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "+".to_string(),
+                    "1 + 2 + 3",
                     6,
-                    9,
+                    7,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                    Arc::new(Symbol::Terminal("+".to_string())),
                 ))),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "3".to_string(),
+                        "1 + 2 + 3",
                         8,
                         9,
                         0,
@@ -362,7 +362,7 @@ fn question_rule_and_operation_earley_test() {
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "1".to_string(),
+                        "1+2+3".to_string(),
                         0,
                         1,
                         0,
@@ -370,16 +370,16 @@ fn question_rule_and_operation_earley_test() {
                     )))],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "+".to_string(),
+                    "1+2+3".to_string(),
                     1,
-                    5,
+                    2,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                    Arc::new(Symbol::Terminal("+".to_string())),
                 ))),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "2".to_string(),
+                        "1+2+3".to_string(),
                         2,
                         3,
                         0,
@@ -387,16 +387,16 @@ fn question_rule_and_operation_earley_test() {
                     )))],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "+".to_string(),
+                    "1+2+3".to_string(),
                     3,
-                    5,
+                    4,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                    Arc::new(Symbol::Terminal("+".to_string())),
                 ))),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "3".to_string(),
+                        "1+2+3".to_string(),
                         4,
                         5,
                         0,
@@ -436,7 +436,7 @@ fn plus_operation_clr_test() {
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "1".to_string(),
+                        "1 + 2 - 3".to_string(),
                         0,
                         1,
                         0,
@@ -444,16 +444,16 @@ fn plus_operation_clr_test() {
                     )))],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "+".to_string(),
+                    "1 + 2 - 3".to_string(),
                     2,
-                    9,
+                    3,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                    Arc::new(Symbol::Terminal("+".to_string())),
                 ))),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "2".to_string(),
+                        "1 + 2 - 3".to_string(),
                         4,
                         5,
                         0,
@@ -461,16 +461,16 @@ fn plus_operation_clr_test() {
                     )))],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "-".to_string(),
+                    "1 + 2 - 3".to_string(),
                     6,
-                    9,
+                    7,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__-__1".to_string())),
+                    Arc::new(Symbol::Terminal("-".to_string())),
                 ))),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "3".to_string(),
+                        "1 + 2 - 3".to_string(),
                         8,
                         9,
                         0,
@@ -507,7 +507,7 @@ fn plus_operation_earley_test() {
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "1".to_string(),
+                        "1 + 2 - 3".to_string(),
                         0,
                         1,
                         0,
@@ -515,16 +515,16 @@ fn plus_operation_earley_test() {
                     )))],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "+".to_string(),
+                    "1 + 2 - 3".to_string(),
                     2,
-                    9,
+                    3,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                    Arc::new(Symbol::Terminal("+".to_string())),
                 ))),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "2".to_string(),
+                        "1 + 2 - 3".to_string(),
                         4,
                         5,
                         0,
@@ -532,16 +532,16 @@ fn plus_operation_earley_test() {
                     )))],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "-".to_string(),
+                    "1 + 2 - 3".to_string(),
                     6,
-                    9,
+                    7,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__-__1".to_string())),
+                    Arc::new(Symbol::Terminal("-".to_string())),
                 ))),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "3".to_string(),
+                        "1 + 2 - 3".to_string(),
                         8,
                         9,
                         0,
@@ -580,7 +580,7 @@ fn terms_grammar_test() {
                 AST::Tree(
                     "expr".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "1234".to_string(),
+                        "1234 + 3953".to_string(),
                         0,
                         4,
                         0,
@@ -588,14 +588,14 @@ fn terms_grammar_test() {
                     )))],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "+".to_string(),
+                    "1234 + 3953".to_string(),
                     5,
-                    11,
+                    6,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                    Arc::new(Symbol::Terminal("+".to_string())),
                 ))),
                 AST::Token(Arc::new(Token::new(
-                    "3953".to_string(),
+                    "1234 + 3953".to_string(),
                     7,
                     11,
                     0,

@@ -27,7 +27,7 @@ fn plus_int_grammar_clr_test() {
                 AST::Tree(
                     "e".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "1".to_string(),
+                        "1+2",
                         0,
                         1,
                         0,
@@ -39,10 +39,10 @@ fn plus_int_grammar_clr_test() {
                     1,
                     3,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                    Arc::new(Symbol::Terminal("+".to_string())),
                 ))),
                 AST::Token(Arc::new(Token::new(
-                    "2".to_string(),
+                    "1+2",
                     2,
                     3,
                     0,
@@ -81,7 +81,7 @@ fn plus_int_rule_grammar_clr_test() {
                     vec![AST::Tree(
                         "t".to_string(),
                         vec![AST::Token(Arc::new(Token::new(
-                            "1".to_string(),
+                            "1 + 2",
                             0,
                             1,
                             0,
@@ -90,16 +90,16 @@ fn plus_int_rule_grammar_clr_test() {
                     )],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "+".to_string(),
+                    "+",
                     2,
                     5,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                    Arc::new(Symbol::Terminal("+".to_string())),
                 ))),
                 AST::Tree(
                     "t".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "2".to_string(),
+                        "1 + 2",
                         4,
                         5,
                         0,
@@ -135,7 +135,7 @@ fn plus_int_grammar_earley_test() {
                 AST::Tree(
                     "e".to_string(),
                     vec![AST::Token(Arc::new(Token::new(
-                        "1".to_string(),
+                        "1+2",
                         0,
                         1,
                         0,
@@ -143,14 +143,14 @@ fn plus_int_grammar_earley_test() {
                     )))],
                 ),
                 AST::Token(Arc::new(Token::new(
-                    "+".to_string(),
+                    "+",
                     1,
                     3,
                     0,
-                    Arc::new(Symbol::Terminal("__STR__+__1".to_string())),
+                    Arc::new(Symbol::Terminal("+".to_string())),
                 ))),
                 AST::Token(Arc::new(Token::new(
-                    "2".to_string(),
+                    "1+2",
                     2,
                     3,
                     0,
