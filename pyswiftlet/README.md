@@ -86,4 +86,4 @@ print(tree.get_children()[0].get_children()[0].get_word())
 - `ambiguity` accepts `resolve` or `explicit`.
 - `parse()` returns a `Tree` on success and raises `ValueError` or `RuntimeError` on failure.
 
-**For more examples, please check notebooks and tests in this package.**
+**For more examples, please check notebooks**
