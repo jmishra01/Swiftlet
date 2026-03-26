@@ -1,6 +1,7 @@
 
 use std::sync::Arc;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::preclude::*;
+
 
 fn main() {
     let grammar = r#"

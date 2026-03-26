@@ -59,6 +59,7 @@ pub mod parser;
 pub mod parser_frontends;
 mod transform;
 pub mod ast;
+pub mod preclude;
 
 pub use crate::builder::GrammarBuilder;
 use crate::grammar::Algorithm;

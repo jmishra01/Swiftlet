@@ -1,7 +1,7 @@
 use crate::grammar::{Rule, RuleOption};
 use crate::lexer::{RegexFlag, Symbol, TerminalDef, get_symbol};
 use crate::ast::AST;
-use crate::{terminal_def, terms};
+use crate::{terminal_def};
 use fancy_regex::Regex;
 use std::collections::HashMap;
 use std::sync::Arc;
