@@ -16,7 +16,7 @@ indexmap = {workspace = true}
 thiserror = {workspace = true}
 
 [features]
-default = []
+default = ["debug"]
 debug = []
 
 [profile.dev]
@@ -47,15 +47,3 @@ harness = false
 [[bench]]
 name = "benchmark"
 harness = false
-
-#[[test]]
-#name = "simple_grammar"
-#path = "tests/simple_grammar_test.rs"
-#
-#[[test]]
-#name = "plus_int_grammar"
-#path = "tests/plus_int_grammar_test.rs"
-#
-#[[test]]
-#name = "rule_feature_in_grammar_test"
-#path = "tests/rule_feature_in_grammar_test.rs"

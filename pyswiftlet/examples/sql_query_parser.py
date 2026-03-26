@@ -8,8 +8,7 @@ from swiftlet import Swiftlet, Transformer
 SQL_GRAMMAR = r"""
 start: select_stmt
 select_stmt: "SELECT"i columns "FROM"i table where_clause?
-columns: "*" -> all_columns
-    | column ("," column)*
+columns: column ("," column)*
 column: NAME
 table: NAME
 
@@ -120,7 +119,7 @@ def parse_sql(query: str, *, algorithm: str = "clr"):
     """Parse a small subset of SQL SELECT queries."""
     import time
     t1 = time.time()
-    parser = Swiftlet(SQL_GRAMMAR, algorithm=algorithm)
+    parser = Swiftlet(SQL_GRAMMAR, algorithm=algorithm, debug=True)
     tree = parser.parse(query)
     t2 = time.time()
     print("parsing time: ", t2 - t1)

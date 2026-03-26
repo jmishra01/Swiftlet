@@ -272,25 +272,31 @@ impl Transformer {
     fn term(&mut self, tree: &[AST]) -> OptVecStr {
         let first = tree[0].clone();
         let second = tree[1].clone();
-        let rule_name = self.transform(&first);
+        let term_name = self.transform(&first);
         let prod = self.transform(&second).unwrap();
-
-        let prod_sym: Arc<Symbol> = terms!(prod.first().unwrap());
+        let prod_sym: Arc<Symbol> = Arc::new(Symbol::Terminal(prod.first().unwrap().to_string()));
+        let priority = if second.is_tree_exist("regex") { 5 } else { 10 };
 
         if let Some(index) = self.terminal.iter().position(|x| x.get_name() == prod_sym) {
             let val = self.terminal.remove(index);
             self.terminal.push(Arc::new(TerminalDef {
                 name: Arc::new(Symbol::Terminal(
-                    rule_name.unwrap().first().unwrap().clone(),
+                    term_name.unwrap().first().unwrap().clone(),
                 )),
                 value: val.value.clone(),
                 pattern: val.pattern.clone(),
                 max_width: val.max_width,
-                priority: 10,
+                priority,
             }));
         } else {
+            // Else used to transform below grammar pattern
+            /*
+                start: NAME
+                NAME: CNAME
+                %import (CNAME)
+             */
             self.terminal.push(terminal_def!(
-                rule_name.unwrap().first().unwrap(),
+                term_name.unwrap().first().unwrap(),
                 prod.first().unwrap(),
                 RegexFlag::default(),
                 10
@@ -421,12 +427,11 @@ impl Transformer {
 
     /// Imports requested common terminals into the current grammar.
     fn import(&mut self, tree: &[AST]) -> OptVecStr {
-        for x in tree.iter() {
+        for x in tree.iter(){
             if let Some(words) = self.transform(x) {
                 for w in words.iter() {
                     if self.common_terminals.contains_key(w) {
-                        self.terminal
-                            .push(self.common_terminals.get(w).unwrap().clone());
+                        self.terminal.push(self.common_terminals.get(w).unwrap().clone());
                     }
                 }
             }

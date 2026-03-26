@@ -38,6 +38,22 @@ impl AST {
         println!("{}", self.get_text());
     }
 
+    /// Return true if child tree exist
+    pub fn is_tree_exist(&self, tree_name: &str) -> bool {
+        match self {
+            AST::Token(_) => false,
+            AST::Tree(name, children) => {
+                if *name == tree_name {
+                    return true;
+                }
+                if children.is_empty() {
+                    return false;
+                }
+                children.iter().any(|child| child.is_tree_exist(tree_name))
+            }
+        }
+    }
+
     /// Returns a single-line AST representation.
     pub fn get_text(&self) -> String {
         inline_print(self)

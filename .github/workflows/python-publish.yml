@@ -33,6 +33,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
+          # The extension uses PyO3 abi3-py310, so one wheel works on CPython 3.10+ for the same platform.
           python-version: "3.10"
 
       - name: Build wheels

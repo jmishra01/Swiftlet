@@ -80,11 +80,14 @@ pub fn get_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
         (
             "or_expansion",
             vec![
-                "expansion",
-                "or_expansion _OR expansion",
-                "or_expansion _NL_OR expansion",
+                "_or_expansion",
             ],
         ),
+        ("_or_expansion", vec![
+            "expansion",
+            "_or_expansion _OR expansion",
+            "_or_expansion _NL_OR expansion",
+        ]),
         ("?expansion", vec!["alias", "_expansion"]),
         ("alias", vec!["_expansion _TO non_terminal"]),
         ("_expansion", vec!["_expansion _expr", "_expr"]),
@@ -108,12 +111,11 @@ pub fn get_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
             "import",
             vec![
                 "_IMPORT _import_args _NL",
-                "_IMPORT _LPAR name_list _RPAR _NL",
+                "_IMPORT _LPAR _name_list _RPAR _NL",
             ],
         ),
         ("_import_args", vec!["name", "_import_args _DOT name"]),
-        ("name_list", vec!["_name_list"]),
-        ("_name_list", vec!["name", "name_list _COMMA name"]),
+        ("_name_list", vec!["name", "_name_list _COMMA name"]),
     ])
 }
 
@@ -236,7 +238,7 @@ mod tests {
         t: t "a"
             | "b"
         "#,
-        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("non_terminal", [Token(RULE, "t")])])]), Tree("non_terminal", [Token(RULE, "t")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "t")]), Tree("string", [Token(STRING, ""a"")])])]), Tree("string", [Token(STRING, ""b"")])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("non_terminal", [Token(RULE, "t")])]), Tree("non_terminal", [Token(RULE, "t")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "t")]), Tree("string", [Token(STRING, ""a"")])]), Tree("string", [Token(STRING, ""b"")])])])])"#
     );
 
     make_test_case!(
@@ -278,7 +280,7 @@ mod tests {
             | t
         t: "0".."9"
         "#,
-        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("or_expansion", [Tree("or_expansion", [Tree("alias", [Tree("non_terminal", [Token(RULE, "e")]), Tree("string", [Token(STRING, ""+"")]), Tree("non_terminal", [Token(RULE, "t")]), Tree("non_terminal", [Token(RULE, "add")])])]), Tree("alias", [Tree("non_terminal", [Token(RULE, "e")]), Tree("string", [Token(STRING, ""-"")]), Tree("non_terminal", [Token(RULE, "t")]), Tree("non_terminal", [Token(RULE, "sub")])])]), Tree("non_terminal", [Token(RULE, "t")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("range", [Token(STRING, ""0""), Token(STRING, ""9"")])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("alias", [Tree("non_terminal", [Token(RULE, "e")]), Tree("string", [Token(STRING, ""+"")]), Tree("non_terminal", [Token(RULE, "t")]), Tree("non_terminal", [Token(RULE, "add")])]), Tree("alias", [Tree("non_terminal", [Token(RULE, "e")]), Tree("string", [Token(STRING, ""-"")]), Tree("non_terminal", [Token(RULE, "t")]), Tree("non_terminal", [Token(RULE, "sub")])]), Tree("non_terminal", [Token(RULE, "t")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("range", [Token(STRING, ""0""), Token(STRING, ""9"")])])])])"#
     );
 
     make_test_case!(
@@ -288,7 +290,7 @@ mod tests {
         e: (e ("+" | "-"))? t
         t: "0".."9"
         "#,
-        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")])]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("range", [Token(STRING, ""0""), Token(STRING, ""9"")])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("range", [Token(STRING, ""0""), Token(STRING, ""9"")])])])])"#
     );
 
     make_test_case!(
@@ -300,7 +302,7 @@ mod tests {
         %import (WS, INT)
         %ignore WS
         "#,
-        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")])]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("import", [Tree("name_list", [Tree("name_list", [Tree("terminal", [Token(TERMINAL, "WS")])]), Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("ignore", [Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "WS")])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("import", [Tree("terminal", [Token(TERMINAL, "WS")]), Tree("terminal", [Token(TERMINAL, "INT")])]), Tree("ignore", [Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "WS")])])])])"#
     );
 
     make_test_case!(
@@ -314,6 +316,6 @@ mod tests {
         %import (WS, INT)
         %ignore WS
         "#,
-        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")])]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("or_expansion", [Tree("string", [Token(STRING, ""*"")])]), Tree("string", [Token(STRING, ""\"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "d")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "d")]), Tree("or_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("string", [Token(STRING, ""("")]), Tree("non_terminal", [Token(RULE, "e")]), Tree("string", [Token(STRING, "")"")])])]), Tree("non_terminal", [Token(RULE, "v")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "v")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("import", [Tree("name_list", [Tree("name_list", [Tree("terminal", [Token(TERMINAL, "WS")])]), Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("ignore", [Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "WS")])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""*"")]), Tree("string", [Token(STRING, ""\"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "d")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "d")]), Tree("or_expansion", [Tree("expansion", [Tree("string", [Token(STRING, ""("")]), Tree("non_terminal", [Token(RULE, "e")]), Tree("string", [Token(STRING, "")"")])]), Tree("non_terminal", [Token(RULE, "v")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "v")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("import", [Tree("terminal", [Token(TERMINAL, "WS")]), Tree("terminal", [Token(TERMINAL, "INT")])]), Tree("ignore", [Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "WS")])])])])"#
     );
 }
