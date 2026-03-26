@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use std::time::Instant;
-use fancy_regex::internal::Insn;
 use swiftlet::{ParserOption, Swiftlet};
 use swiftlet::grammar::Algorithm;
 
