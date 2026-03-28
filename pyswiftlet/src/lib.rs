@@ -66,7 +66,7 @@ fn build_parser_from_grammar(
 ) -> PyResult<RustSwiftlet> {
     let parser_option = build_parser_option(start, algorithm, ambiguity, debug)?;
     catch_unwind(AssertUnwindSafe(|| {
-        RustSwiftlet::from_string(grammar, parser_option)
+        RustSwiftlet::from_string(grammar, parser_option).unwrap()
     }))
     .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))
 }
@@ -81,7 +81,7 @@ fn build_parser_from_file(
 ) -> PyResult<RustSwiftlet> {
     let parser_option = build_parser_option(start, algorithm, ambiguity, debug)?;
     catch_unwind(AssertUnwindSafe(|| {
-        RustSwiftlet::from_file(file.to_string(), parser_option)
+        RustSwiftlet::from_file(file.to_string(), parser_option).unwrap()
     }))
     .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))
 }

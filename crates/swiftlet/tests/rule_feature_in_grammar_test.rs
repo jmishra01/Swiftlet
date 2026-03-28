@@ -18,7 +18,7 @@ fn option_rule_clr_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let ast = parser.parse("ii");
     let right = AST::Tree(
         "s".to_string(),
@@ -63,7 +63,7 @@ fn option_rule_earley_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let ast = parser.parse("ii");
     let right = AST::Tree(
         "s".to_string(),
@@ -112,7 +112,7 @@ fn optional_expr_operation_clr_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let left = parser.parse("1 + 2 + 3");
 
     let right = AST::Tree(
@@ -192,7 +192,7 @@ fn optional_expr_operation_earley_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let left = parser.parse("1+2+3");
 
     let right = AST::Tree(
@@ -274,7 +274,7 @@ fn question_rule_and_operation_clr_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let left = parser.parse("1 + 2 + 3");
 
     let right = AST::Tree(
@@ -351,7 +351,7 @@ fn question_rule_and_operation_earley_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let left = parser.parse("1+2+3");
 
     let right = AST::Tree(
@@ -425,7 +425,7 @@ fn plus_operation_clr_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let left = parser.parse("1 + 2 - 3");
 
     let right = AST::Tree(
@@ -496,7 +496,7 @@ fn plus_operation_earley_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let left = parser.parse("1 + 2 - 3");
 
     let right = AST::Tree(
@@ -569,7 +569,7 @@ fn terms_grammar_test() {
         algorithm: Algorithm::CLR,
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(text, conf);
+    let parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
     let left = parser.parse("1234 + 3953");
 
     let right = AST::Tree(

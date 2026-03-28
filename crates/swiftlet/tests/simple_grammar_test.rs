@@ -17,7 +17,7 @@ fn simple_grammar_clr_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let left = parser.parse("ii");
     let right = AST::Tree(
         "s".to_string(),
@@ -65,7 +65,7 @@ fn simple_grammar_earley_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let left = parser.parse("ii");
     let right = AST::Tree(
         "s".to_string(),
@@ -117,7 +117,7 @@ fn terms_clr_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let left = parser.parse("123").unwrap();
 
     let right = AST::Tree(

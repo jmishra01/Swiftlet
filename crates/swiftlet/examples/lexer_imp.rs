@@ -14,7 +14,7 @@ fn main() {
             debug: true,
             algorithm: Algorithm::CLR,
             ..Default::default()});
-    let parser = Swiftlet::from_string(grammar, po.clone());
+    let parser = Swiftlet::from_string(grammar, po.clone()).expect("failed to build parser");
 
     let parsed = parser.parse("selectselectbar");
 

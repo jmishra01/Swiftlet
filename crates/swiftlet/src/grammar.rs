@@ -49,8 +49,7 @@ pub struct Rule {
     pub(crate) origin: Arc<Symbol>,
     pub(crate) expansion: Vec<Arc<Symbol>>,
     pub(crate) rule_option: Arc<RuleOption>,
-    pub(crate) order: usize,
-    pub(crate) expansion_len: usize,
+    pub(crate) order: usize
 }
 
 impl Rule {
@@ -61,13 +60,11 @@ impl Rule {
         rule_option: Arc<RuleOption>,
         order: usize,
     ) -> Self {
-        let expansion_len = expansion.len();
         Self {
             origin,
             expansion,
             rule_option,
             order,
-            expansion_len,
         }
     }
 
@@ -78,7 +75,7 @@ impl Rule {
 
     /// Returns the expansion length.
     pub(crate) const fn len(&self) -> usize {
-        self.expansion_len
+        self.expansion.len()
     }
 }
 

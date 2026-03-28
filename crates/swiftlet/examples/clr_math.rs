@@ -18,7 +18,7 @@ fn main() {
         ..Default::default()
     });
 
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let text = "(1+(4+3)+4+5)";
     match parser.parse(text) {
         Ok(res) => res.pretty_print(),

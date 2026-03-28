@@ -19,7 +19,7 @@ fn main() {
         ..Default::default()
     });
 
-    let text_parser = Swiftlet::from_string(text, conf);
+    let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
 
     match text_parser.parse("id + id - id") {
         Ok(res) => res.pretty_print(),

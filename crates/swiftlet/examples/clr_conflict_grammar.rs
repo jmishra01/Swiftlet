@@ -13,7 +13,7 @@ fn main() {
         ambiguity: Ambiguity::Explicit,
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     match parser.parse("12") {
         Ok(ast) => ast.pretty_print(),
         Err(e) => panic!("{}", e),

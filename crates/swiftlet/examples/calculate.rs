@@ -37,7 +37,7 @@ fn main() {
         debug: true,
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let parsed_text = parser.parse(&text);
 
     match parsed_text {

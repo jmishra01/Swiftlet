@@ -2,9 +2,10 @@ use crate::ParserOption;
 use crate::grammar::Algorithm;
 use crate::lexer::Tokenizer;
 use crate::ast::AST;
-use crate::parser::{Parser, clr::Clr, earley::EarleyParser, error::ParserError};
+use crate::parser::{clr::Clr, earley::EarleyParser, Parser};
 use crate::parser_frontends::ParserFrontend;
 use std::sync::Arc;
+use crate::error::ParserError;
 
 /// Builds and executes the concrete parser selected by [`ParserOption`].
 pub struct GrammarBuilder {
@@ -44,12 +45,12 @@ mod tests {
 
     #[cfg(feature = "debug")]
     fn test_frontend(grammar: &str, parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
-        load_grammar(grammar, parser_opt)
+        load_grammar(grammar, parser_opt).expect("failed to load grammar")
     }
 
     #[cfg(not(feature = "debug"))]
     fn test_frontend(grammar: &str, _parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
-        load_grammar(grammar)
+        load_grammar(grammar).expect("failed to load grammar")
     }
 
     fn grammar_text() -> &'static str {

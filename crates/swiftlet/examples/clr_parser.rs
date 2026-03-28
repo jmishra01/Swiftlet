@@ -28,7 +28,8 @@ fn main() {
     });
     for grammar in grammars {
         let t1 = Instant::now();
-        let parser = Swiftlet::from_string(grammar, conf.clone());
+        let parser = Swiftlet::from_string(grammar, conf.clone())
+            .expect("failed to build parser");
         for text in ["ABAB", "ABAAAB"].iter() {
             let t11 = Instant::now();
             if let Ok(parsed) = parser.parse(text) {

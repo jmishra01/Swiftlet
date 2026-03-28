@@ -1,12 +1,11 @@
 use crate::lexer::Tokenizer;
 use crate::ast::AST;
-use crate::parser::error::ParserError;
+use crate::error::ParserError;
 use crate::parser_frontends::ParserFrontend;
 use std::sync::Arc;
 
 pub mod clr;
 pub mod earley;
-pub mod error;
 mod utils;
 
 /// Common interface implemented by concrete parser backends.

@@ -2,7 +2,7 @@ use crate::grammar::{Rule, RuleOption};
 use crate::lexer::{Symbol, Token, Tokenizer};
 use crate::ast::AST;
 use crate::parser::Parser;
-use crate::parser::error::ParserError;
+use crate::error::ParserError;
 use crate::parser::utils::dot_state;
 use crate::parser_frontends::ParserFrontend;
 use crate::{Ambiguity, ParserOption, non_terms};
@@ -349,12 +349,12 @@ mod tests {
 
     #[cfg(feature = "debug")]
     fn test_frontend(grammar: &str, parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
-        load_grammar(grammar, parser_opt)
+        load_grammar(grammar, parser_opt).expect("failed to load grammar")
     }
 
     #[cfg(not(feature = "debug"))]
     fn test_frontend(grammar: &str, _parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
-        load_grammar(grammar)
+        load_grammar(grammar).expect("failed to load grammar")
     }
 
     #[test]

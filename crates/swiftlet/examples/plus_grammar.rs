@@ -29,7 +29,7 @@ fn main() {
 
     let conf = Arc::new(ParserOption::default());
 
-    let text_parser = Swiftlet::from_string(text, conf);
+    let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
 
     match text_parser.parse("1 + 2 + 3") {
         Ok(res) => {

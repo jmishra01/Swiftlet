@@ -4,9 +4,239 @@ use crate::ast::AST;
 use crate::{terminal_def};
 use fancy_regex::Regex;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+use crate::error::ParserError;
+
+static ESCAPE: LazyLock<Regex> = LazyLock::new(|| {
+    let re = Regex::new(r"(\p{P})").unwrap();
+    re
+});
 
 pub type OptVecStr = Option<Vec<String>>;
+pub type OptStr = Option<String>;
+
+
+pub(crate) fn fetch_terminals(ast: &AST) -> Vec<String> {
+    match ast {
+        AST::Tree(_, childs) => {
+            childs
+                .iter()
+                .map(fetch_terminals)
+                .flatten()
+                .collect::<Vec<_>>()
+        },
+        AST::Token(token) => {
+            let word = token.word();
+            vec![if word.starts_with("\"") & word.ends_with("\"") {
+                    word[1..word.len() - 1].to_string()
+                } else {
+                    word.to_string()
+                }]
+        },
+    }
+}
+
+pub struct TerminalCompiler<'a> {
+    terminals: Vec<&'a AST>,
+    map: HashMap<String, Arc<TerminalDef>>,
+    index: usize,
+    terminal_len: usize
+}
+
+impl<'a> TerminalCompiler<'a> {
+    pub fn new(terminals: Vec<&'a AST>) -> Self {
+        let terminal_len = terminals.len();
+        Self { terminals, map: HashMap::new(), index: 0,  terminal_len}
+    }
+
+    pub fn get_terminals(&self) -> Vec<Arc<TerminalDef>> {
+        self
+            .map
+            .values()
+            .map(|t| t.clone())
+            .collect::<Vec<_>>()
+    }
+
+    pub fn compile(&mut self) {
+        while self.index < self.terminal_len {
+            let terminal = self.terminals[self.index];
+            self._transform(terminal);
+            self.index += 1;
+        }
+    }
+
+    fn _string(&mut self, child: &[AST]) -> OptStr {
+        let first = child.first().unwrap();
+        if let Some(w) = self._transform(first) {
+            if w.ends_with("\"i") {
+                let word = &w.as_str()[1..w.len()-2];
+                let word  = ESCAPE.replace_all(word, r"\$1");
+                return Some(format!("(?i:{})", word));
+            }
+            let word = &w.as_str()[1..w.len()-1];
+            let word  = ESCAPE.replace_all(word, r"\$1");
+            return Some(word.to_string());
+        }
+        None
+    }
+
+    fn _regex(&mut self, child: &[AST]) -> OptStr {
+        let first = child.first().unwrap();
+        let pattern = self._transform(first)?;
+        let mut pattern = pattern.as_str();
+        pattern = pattern.strip_prefix("/")?;
+
+        let regex_flag_match = Regex::new(r"/[imsux]*$").unwrap();
+        let captures = regex_flag_match.captures(pattern).unwrap().unwrap();
+        let capture = captures.get(0).unwrap().as_str();
+        pattern = pattern.strip_suffix(capture)?;
+        let mut flags = String::new();
+
+        for flag in "isux".chars() {
+            if capture.contains(flag) {
+                flags = format!("{}{}", flags, flag);
+            }
+        }
+
+        let mut pattern = if flags.len() > 0 {
+            format!("({}?:{})", flags, pattern.to_string())
+        } else {
+            pattern.to_string()
+        };
+        if capture.contains("m") {
+            pattern = format!("(m?:^{})", pattern);
+        }
+        Some(pattern)
+    }
+
+    fn _or_expansion(&mut self, child: &[AST]) -> OptStr {
+        let val = child
+            .iter()
+            .filter_map(|val| self._transform(val))
+            .collect::<Vec<String>>();
+
+        if val.len() > 1 {
+            return Some(format!("({})", val.join("|")));
+        }
+        Some(val.first().unwrap().to_string())
+    }
+
+    fn _maybe(&mut self, child: &[AST]) -> OptStr {
+        let first = child.first().unwrap();
+        let maybe = self._transform(first)?;
+        Some(format!("[{}]", maybe))
+    }
+
+    fn _op_expansion(&mut self, child: &[AST]) -> OptStr {
+        let first = child.first().unwrap();
+        let second = child.last().unwrap();
+        let sign = self._transform(second)?;
+
+        let terminal = self._transform(first)?;
+        let is_contains = self.map.contains_key(&terminal);
+        if !is_contains{
+            for index in (self.index + 1)..self.terminal_len {
+                let terminal = self.terminals[index];
+                self._transform(terminal);
+            }
+        }
+        let value = self.map.get(&terminal).unwrap();
+
+        Some(format!("({}){}", value.value, sign))
+    }
+
+    fn _expansion(&mut self, child: &[AST]) -> OptStr {
+        Some(
+            child
+            .iter()
+            .filter_map(|c| {
+                match c {
+                    AST::Token(_) => None,
+                    AST::Tree(name, childs) => {
+                        match name.as_str() {
+                            "terminal" => {
+                                let child_terminal_name = self._terminal(childs).unwrap();
+                                if !self.map.contains_key(&child_terminal_name) {
+                                    for _index in (self.index + 1)..self.terminal_len {
+                                        let term = self.terminals[_index];
+                                        match term {
+                                            AST::Tree(_, term_children) => {
+                                                let &_first = term.get_child_tree("terminal")?.first()?;
+                                                let token_word = self._transform(_first)?;
+                                                if token_word.cmp(&child_terminal_name).is_eq() {
+                                                    self._term(term_children);
+                                                }
+                                            },
+                                            _ => unreachable!()
+                                        }
+                                    }
+                                }
+                                match self.map.get(&child_terminal_name) {
+                                    Some(term) => Some(term.value.clone()),
+                                    None => None
+                                }
+                            },
+                            _ => self._transform(c)
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("")
+        )
+    }
+
+    fn _term(&mut self, child: &[AST]) -> OptStr {
+        let first_child = child.first().unwrap();
+        let name_term = self._transform(first_child)?;
+        if self.map.contains_key(&name_term) {
+            return None
+        }
+
+        let second_child = child.last().unwrap();
+        let value = self._transform(second_child)?;
+        let terminal_def = TerminalDef::with_regex(&name_term,
+                                                   &value, RegexFlag::default(), 5);
+        self.map.insert(name_term, Arc::new(terminal_def));
+        None
+    }
+
+    fn _terminal(&mut self, child: &[AST]) -> OptStr {
+        self._transform(child.first().unwrap())
+    }
+
+    fn _range(&mut self, child: &[AST]) -> OptStr {
+        let first = child.first().unwrap();
+        let first_range = self._transform(first)?;
+        let first_range = first_range[1..first_range.len()-1].to_owned();
+
+        let second = child.last().unwrap();
+        let second_range = self._transform(second)?;
+        let second_range = second_range[1..second_range.len()-1].to_owned();
+
+        Some(format!("[{}-{}]", first_range, second_range))
+    }
+
+    fn _transform(&mut self, ast: &AST) -> OptStr {
+        match ast {
+            AST::Token(token) => Some(token.word().to_string()),
+            AST::Tree(name, children) => {
+                match name.as_str() {
+                    "term" => self._term(children),
+                    "string" => self._string(children),
+                    "expansion" => self._expansion(children),
+                    "or_expansion" => self._or_expansion(children),
+                    "op_expansion" => self._op_expansion(children),
+                    "terminal" => self._terminal(children),
+                    "regex" => self._regex(children),
+                    "maybe" => self._maybe(children),
+                    "range" => self._range(children),
+                    _ => panic!("{} tree not found.", name)
+                }
+            }
+        }
+    }
+}
 
 /// Normalizes origin symbol and derives rule options from name and priority.
 fn origin_apply(name: &str, priority: usize, alias_rule: OptVecStr) -> (String, Arc<RuleOption>) {
@@ -22,18 +252,18 @@ fn origin_apply(name: &str, priority: usize, alias_rule: OptVecStr) -> (String, 
 }
 
 /// Converts grammar-parser AST nodes into parser rules and terminal definitions.
-pub struct Transformer {
+pub struct RuleCompiler<'a> {
     terminal: Vec<Arc<TerminalDef>>,
     ignores: Vec<String>,
-    common_terminals: HashMap<String, Arc<TerminalDef>>,
+    common_terminals: &'a HashMap<String, Arc<TerminalDef>>,
     count: usize,
     cache: HashMap<String, String>,
     rules: HashMap<Arc<Symbol>, Vec<Arc<Rule>>>,
 }
 
-impl Transformer {
+impl<'a> RuleCompiler<'a> {
     /// Creates an empty transformer with shared built-in terminals.
-    pub fn new(common_terminals: HashMap<String, Arc<TerminalDef>>) -> Self {
+    pub fn new(common_terminals: &'a HashMap<String, Arc<TerminalDef>>) -> Self {
         Self {
             terminal: Vec::new(),
             ignores: Vec::new(),
@@ -45,21 +275,18 @@ impl Transformer {
     }
 
     /// Returns transformed grammar and validates non-terminal references.
-    pub fn get_grammar(&self) -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
+    pub fn get_grammar(&self) -> Result<HashMap<Arc<Symbol>, Vec<Arc<Rule>>>, ParserError> {
         for v in self.rules.values() {
             for r in v.iter() {
                 for e in r.expansion.iter() {
                     if !e.is_terminal() && !self.rules.contains_key(e) {
-                        panic!(
-                            "\"{}\" not defined in the given grammar",
-                            e.as_ref().as_str()
-                        );
+                        return Err(ParserError::RuleProductionNotFound(e.as_str().to_string()))
                     }
                 }
             }
         }
 
-        self.rules.clone()
+        Ok(self.rules.clone())
     }
 
     /// Sorts terminals by descending max width for longest-match behavior.
@@ -82,44 +309,22 @@ impl Transformer {
         self.ignores.clone()
     }
 
-    /// Prints transformed grammar rules.
-    #[cfg(feature = "debug")]
-    pub fn print_grammar(&self) {
-        println!("\nGrammar");
-        println!("=======");
-        for (_, prod) in self.rules.iter() {
-            for p in prod.iter() {
-                println!("{p:?}");
-            }
-        }
-    }
-
-    /// Prints transformed terminals.
-    #[cfg(feature = "debug")]
-    pub fn print_terminals(&self) {
-        println!("\nTerminals");
-        println!("=========");
-        for t in self.terminal.iter() {
-            println!("{t:?}");
-        }
-    }
-
     #[inline]
     /// Transforms a terminal or non-terminal leaf node.
     fn terminal_non_terminal(&mut self, tree: &[AST]) -> OptVecStr {
-        self.transform(&tree[0])
+        self._transform(&tree[0])
     }
 
     #[inline]
     /// Expands concatenated expressions into full production combinations.
     fn expansions(&mut self, tree: &[AST]) -> OptVecStr {
         if tree.len() == 1 {
-            let ret = self.transform(&tree[0]);
+            let ret = self._transform(&tree[0]);
             return ret;
         }
         let mut v_result = Vec::from(["".to_string()]);
         for node in tree.iter() {
-            if let Some(t) = self.transform(node) {
+            if let Some(t) = self._transform(node) {
                 v_result = t
                     .iter()
                     .flat_map(|x| {
@@ -138,12 +343,12 @@ impl Transformer {
     /// Transforms OR alternatives and memoizes generated helper rules.
     fn or_expansion(&mut self, tree: &[AST]) -> OptVecStr {
         if tree.len() == 1 {
-            return self.transform(tree.first().unwrap());
+            return self._transform(&tree.first().unwrap());
         }
 
         let result: Vec<String> = tree
             .iter()
-            .filter_map(|x| self.transform(x))
+            .filter_map(|x| self._transform(x))
             .flatten()
             .collect();
         let or_text = result.join("|");
@@ -163,12 +368,12 @@ impl Transformer {
     #[inline]
     /// Expands postfix operators (`?`, `+`, `*`) into helper productions.
     fn op_expansion(&mut self, tree: &[AST]) -> OptVecStr {
-        let second = self.transform(&tree[1]).unwrap()[0].clone();
+        let second = self._transform(&tree[1]).unwrap()[0].clone();
 
         if let AST::Tree(name, _) = &tree[0]
             && name.cmp(&"terminal".to_string()).is_eq()
         {
-            let v_result = self.transform(&tree[0]).unwrap()[0].clone();
+            let v_result = self._transform(&tree[0]).unwrap()[0].clone();
 
             if let Some(r) = self
                 .terminal
@@ -179,7 +384,7 @@ impl Transformer {
             }
         }
 
-        let mut v_result = Vec::from([self.transform(&tree[0]).unwrap().join(" ")]);
+        let mut v_result = Vec::from([self._transform(&tree[0]).unwrap().join(" ")]);
 
         let second = second.trim();
 
@@ -239,7 +444,7 @@ impl Transformer {
     #[inline]
     /// Transforms a rule declaration node.
     fn rule(&mut self, tree: &[AST]) -> OptVecStr {
-        let rule_name = self.transform(&tree[0]).unwrap();
+        let rule_name = self._transform(&tree[0]).unwrap();
         let child = tree.last().unwrap();
 
         let mut alias_rules = vec![];
@@ -254,9 +459,9 @@ impl Transformer {
         }
 
 
-        let prod = self.transform(child).unwrap();
+        let prod = self._transform(child).unwrap();
         let priority = if tree.len() > 2 {
-            let priority = self.transform(&tree[1]).unwrap();
+            let priority = self._transform(&tree[1]).unwrap();
             priority[0].as_str().parse::<usize>().unwrap()
         } else {
             0
@@ -267,50 +472,50 @@ impl Transformer {
         None
     }
 
-    #[inline]
-    /// Transforms a terminal declaration node.
-    fn term(&mut self, tree: &[AST]) -> OptVecStr {
-        let first = tree[0].clone();
-        let second = tree[1].clone();
-        let term_name = self.transform(&first);
-        let prod = self.transform(&second).unwrap();
-        let prod_sym: Arc<Symbol> = Arc::new(Symbol::Terminal(prod.first().unwrap().to_string()));
-        let priority = if second.is_tree_exist("regex") { 5 } else { 10 };
-
-        if let Some(index) = self.terminal.iter().position(|x| x.get_name() == prod_sym) {
-            let val = self.terminal.remove(index);
-            self.terminal.push(Arc::new(TerminalDef {
-                name: Arc::new(Symbol::Terminal(
-                    term_name.unwrap().first().unwrap().clone(),
-                )),
-                value: val.value.clone(),
-                pattern: val.pattern.clone(),
-                max_width: val.max_width,
-                priority,
-            }));
-        } else {
-            // Else used to transform below grammar pattern
-            /*
-                start: NAME
-                NAME: CNAME
-                %import (CNAME)
-             */
-            self.terminal.push(terminal_def!(
-                term_name.unwrap().first().unwrap(),
-                prod.first().unwrap(),
-                RegexFlag::default(),
-                10
-            ));
-        }
-
-        None
-    }
+    // #[inline]
+    // /// Transforms a terminal declaration node.
+    // fn term(&mut self, tree: &[AST]) -> OptVecStr {
+    //     let first = tree[0].clone();
+    //     let second = tree[1].clone();
+    //     let term_name = self._transform(&first);
+    //     let prod = self._transform(&second).unwrap();
+    //     let prod_sym: Arc<Symbol> = Arc::new(Symbol::Terminal(prod.first().unwrap().to_string()));
+    //     let priority = if second.is_tree_exist("regex") { 5 } else { 10 };
+    //
+    //     if let Some(index) = self.terminal.iter().position(|x| x.get_name() == prod_sym) {
+    //         let val = self.terminal.remove(index);
+    //         self.terminal.push(Arc::new(TerminalDef {
+    //             name: Arc::new(Symbol::Terminal(
+    //                 term_name.unwrap().first().unwrap().clone(),
+    //             )),
+    //             value: val.value.clone(),
+    //             pattern: val.pattern.clone(),
+    //             max_width: val.max_width,
+    //             priority,
+    //         }));
+    //     } else {
+    //         // Else used to transform below grammar pattern
+    //         /*
+    //             start: NAME
+    //             NAME: CNAME
+    //             %import (CNAME)
+    //          */
+    //         self.terminal.push(terminal_def!(
+    //             term_name.unwrap().first().unwrap(),
+    //             prod.first().unwrap(),
+    //             RegexFlag::default(),
+    //             10
+    //         ));
+    //     }
+    //
+    //     None
+    // }
 
     #[inline]
     /// Transforms a string range node into a character class regex.
     fn range(&mut self, tree: &[AST]) -> OptVecStr {
-        let first = self.transform(&tree[0]).unwrap();
-        let second = self.transform(&tree[1]).unwrap();
+        let first = self._transform(&tree[0]).unwrap();
+        let second = self._transform(&tree[1]).unwrap();
 
         let clean = |x: &String| {
             x.strip_prefix("\"")
@@ -331,7 +536,7 @@ impl Transformer {
     #[inline]
     /// Transforms a string literal into a synthetic terminal.
     fn string(&mut self, tree: &[AST]) -> OptVecStr {
-        let word = self.transform(&tree[0]).unwrap();
+        let word = self._transform(&tree[0]).unwrap();
         let word = word[0].strip_prefix("\"")?;
         let is_case_insensitive = word.ends_with("\"i");
         let word = if is_case_insensitive {
@@ -366,14 +571,14 @@ impl Transformer {
             if let Some(name) = node.get_tree_name()
                 && name.cmp(&"terminal".to_string()).is_eq()
             {
-                self.transform(node);
+                self._transform(node);
             }
         }
         for node in tree.iter() {
             if let Some(name) = node.get_tree_name()
                 && name.cmp(&"terminal".to_string()).is_ne()
             {
-                self.transform(node);
+                self._transform(node);
             }
         }
         None
@@ -383,7 +588,7 @@ impl Transformer {
     /// Collects ignore terminal names from ignore directives.
     fn ignore(&mut self, tree: &[AST]) -> OptVecStr {
         for node in tree.iter() {
-            if let Some(v) = self.transform(node) {
+            if let Some(v) = self._transform(node) {
                 for i in v.iter() {
                     self.ignores.push(i.clone());
                 }
@@ -399,7 +604,7 @@ impl Transformer {
         let mut name = "_".to_string();
 
         for node in tree.iter() {
-            if let Some(v_str) = self.transform(node) {
+            if let Some(v_str) = self._transform(node) {
                 let joined = v_str.join(" ").to_string();
                 name.push_str(joined.replace(" ", "_").as_str());
                 v_result.push(joined);
@@ -416,7 +621,7 @@ impl Transformer {
     fn maybe(&mut self, tree: &[AST]) -> OptVecStr {
         let v_result = tree
             .iter()
-            .filter_map(|x| self.transform(x))
+            .filter_map(|x| self._transform(x))
             .flatten()
             .collect::<Vec<String>>()
             .join(" ")
@@ -428,7 +633,7 @@ impl Transformer {
     /// Imports requested common terminals into the current grammar.
     fn import(&mut self, tree: &[AST]) -> OptVecStr {
         for x in tree.iter(){
-            if let Some(words) = self.transform(x) {
+            if let Some(words) = self._transform(x) {
                 for w in words.iter() {
                     if self.common_terminals.contains_key(w) {
                         self.terminal.push(self.common_terminals.get(w).unwrap().clone());
@@ -441,18 +646,18 @@ impl Transformer {
 
     /// Returns parsed priority token.
     fn priority(&mut self, tree: &[AST]) -> OptVecStr {
-        self.transform(&tree[0])
+        self._transform(&tree[0])
     }
 
     /// Transforms alias production and injects alias rule.
     fn alias(&mut self, tree: &[AST]) -> OptVecStr {
         let last_node = tree.last().unwrap();
-        let rule = self.transform(last_node).unwrap();
+        let rule = self._transform(last_node).unwrap();
 
         let production = tree
             .iter()
             .take(tree.len() - 1)
-            .flat_map(|x| self.transform(x).unwrap())
+            .flat_map(|x| self._transform(x).unwrap())
             .collect::<Vec<String>>()
             .join(" ")
             .trim()
@@ -466,7 +671,7 @@ impl Transformer {
     /// Transforms regex literal node into a synthetic regex terminal.
     fn regex(&mut self, tree: &[AST]) -> OptVecStr {
         let node = tree.last().unwrap();
-        let rule = self.transform(node).unwrap();
+        let rule = self._transform(node).unwrap();
         let mut pattern = rule.first().unwrap().as_str();
         pattern = pattern.strip_prefix("/")?;
 
@@ -491,8 +696,18 @@ impl Transformer {
         Some(vec![terminal_name])
     }
 
+    pub fn compile(&mut self, tree: Vec<&AST>) -> OptVecStr {
+        let len = tree.len();
+        for i in 0..len {
+            let rule = tree.get(i).unwrap();
+            self._transform(rule);
+        }
+
+        None
+    }
+
     /// Dispatches AST transformation by node type.
-    pub fn transform(&mut self, ast: &AST) -> OptVecStr {
+    fn _transform(&mut self, ast: &AST) -> OptVecStr {
         match ast {
             AST::Token(token) => Some(vec![token.word().to_string()]),
             AST::Tree(name, tree) => match name.as_str() {
@@ -500,7 +715,7 @@ impl Transformer {
                 "expansions" | "expansion" => self.expansions(tree),
                 "or_expansion" => self.or_expansion(tree),
                 "rule" => self.rule(tree),
-                "term" => self.term(tree),
+                // "term" => self.term(tree),
                 "range" => self.range(tree),
                 "string" => self.string(tree),
                 "start" => self.start(tree),
@@ -517,3 +732,5 @@ impl Transformer {
         }
     }
 }
+
+

@@ -1,6 +1,6 @@
 use fancy_regex::{Regex, RegexBuilder};
 use std::collections::HashSet;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -236,6 +236,13 @@ impl Token {
         } else {
             &self.source
         }
+    }
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let text = format!("Token {{ word: {}, start: {}, end: {}, line: {}, terminal: {:?}  }}", self.word(), self.start, self.end, self.line, self.terminal);
+        f.write_str(&text)
     }
 }
 

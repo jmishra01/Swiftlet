@@ -10,7 +10,7 @@ fn main() {
     let math_expr = ["1+2", "1+2+3"];
 
     let conf = Arc::new(ParserOption::default());
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     for expr in math_expr {
         match parser.parse(&expr) {
             Ok(ast) => {

@@ -11,7 +11,7 @@ fn main() {
 
     let conf = Arc::new(ParserOption::default());
 
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let text = "1";
     if let Ok(parsed) = parser.parse(text) {
         parsed.pretty_print();

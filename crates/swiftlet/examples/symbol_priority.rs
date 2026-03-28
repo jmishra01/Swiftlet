@@ -14,7 +14,7 @@ fn main() {
         start: "e".to_string(),
         ..Default::default()
     });
-    let text_parser = Swiftlet::from_string(text, conf);
+    let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
     let ast = text_parser.parse("id*id+id");
     ast.unwrap().pretty_print();
 }

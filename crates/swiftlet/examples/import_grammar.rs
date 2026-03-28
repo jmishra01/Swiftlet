@@ -14,7 +14,7 @@ fn main() {
         algorithm: Algorithm::CLR,
         ..Default::default()
     });
-    let text_parser = Swiftlet::from_string(text, opt);
+    let text_parser = Swiftlet::from_string(text, opt).expect("failed to build parser");
 
     let parsed = text_parser.parse("1234 + 3953");
 

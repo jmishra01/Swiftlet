@@ -13,7 +13,7 @@ fn main() {
         "#;
 
     let conf = Arc::new(ParserOption::default());
-    let text_parser = Swiftlet::from_string(text, conf);
+    let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
 
     for w in ["AB", "A-+B"].iter() {
         match text_parser.parse(w) {

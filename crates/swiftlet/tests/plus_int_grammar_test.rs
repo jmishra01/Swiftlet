@@ -16,7 +16,7 @@ fn plus_int_grammar_clr_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let ast = parser.parse("1+2");
 
     let right = AST::Tree(
@@ -68,7 +68,7 @@ fn plus_int_rule_grammar_clr_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let ast = parser.parse("1 + 2");
 
     let right = AST::Tree(
@@ -124,7 +124,7 @@ fn plus_int_grammar_earley_test() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let ast = parser.parse("1+2");
 
     let right = AST::Tree(

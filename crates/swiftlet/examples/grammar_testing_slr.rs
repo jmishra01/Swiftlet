@@ -16,7 +16,7 @@ fn main() {
         start: "a".to_string(),
         ..Default::default()
     });
-    let text_parser = Swiftlet::from_string(text, conf);
+    let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
     let ast = text_parser.parse("AB");
     ast.unwrap().print();
     // LR(0)  -> Failed to parse

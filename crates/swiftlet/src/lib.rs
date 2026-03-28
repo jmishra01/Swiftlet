@@ -35,7 +35,7 @@
 //!         "#;
 //!
 //!     let conf = Arc::new(ParserOption::default());
-//!     let mut parser = Swiftlet::from_string(grammar, conf);
+//!     let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
 //!     let text = "10 - 2 + 5 - 2";
 //!
 //!     match parser.parse(text) {
@@ -60,12 +60,13 @@ pub mod parser_frontends;
 mod transform;
 pub mod ast;
 pub mod preclude;
+pub mod error;
 
 pub use crate::builder::GrammarBuilder;
 use crate::grammar::Algorithm;
 use crate::ast::AST;
 use crate::load_grammar::load_grammar;
-use crate::parser::error::ParserError;
+use error::ParserError;
 use std::sync::Arc;
 
 /// Ambiguity Enum
@@ -106,22 +107,28 @@ pub struct Swiftlet {
 
 impl Swiftlet {
     /// Constructs a parser from grammar text.
-    pub fn from_string(grammar: &str, parser_option: Arc<ParserOption>) -> Self {
+    pub fn from_string(grammar: &str, parser_option: Arc<ParserOption>) -> Result<Self, ParserError> {
         #[cfg(feature = "debug")]
-        let _grammar = load_grammar(grammar, parser_option.clone());
+        let _grammar = match load_grammar(grammar, parser_option.clone()) {
+            Ok(g) => g,
+            Err(err) => return Err(err)
+        };
 
         #[cfg(not(feature = "debug"))]
-        let _grammar = load_grammar(grammar);
+        let _grammar = match load_grammar(grammar) {
+            Ok(g) => g,
+            Err(err) => return Err(err)
+        };
 
-        Self {
+        Ok(Self {
             grammar_builder: GrammarBuilder::new(_grammar, parser_option.clone()),
-        }
+        })
     }
 
     /// Constructs a parser from a grammar file path.
     ///
     /// Panics if the file cannot be read.
-    pub fn from_file(file: String, parser_option: Arc<ParserOption>) -> Self {
+    pub fn from_file(file: String, parser_option: Arc<ParserOption>) -> Result<Self, ParserError> {
         let content = std::fs::read_to_string(file).unwrap();
         Self::from_string(content.as_str(), parser_option)
     }
@@ -153,7 +160,8 @@ mod tests {
             algorithm: Algorithm::CLR,
             ..ParserOption::default()
         };
-        let tp = Swiftlet::from_string(text, Arc::from(parser_option));
+        let tp = Swiftlet::from_string(text, Arc::from(parser_option))
+            .expect("failed to build parser");
         assert!(tp.parse("1 + 2").is_ok());
     }
 
@@ -181,7 +189,8 @@ mod tests {
             algorithm: Algorithm::CLR,
             ..ParserOption::default()
         });
-        let parser = Swiftlet::from_file(path.to_string_lossy().to_string(), parser_option);
+        let parser = Swiftlet::from_file(path.to_string_lossy().to_string(), parser_option)
+            .expect("failed to build parser");
         assert!(parser.parse("10").is_ok());
 
         let _ = fs::remove_file(path);

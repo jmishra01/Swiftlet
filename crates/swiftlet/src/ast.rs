@@ -54,6 +54,15 @@ impl AST {
         }
     }
 
+    pub fn get_children(&self) -> Option<&Vec<AST>> {
+        match self {
+            AST::Token(_) => None,
+            AST::Tree(_, children) => {
+                Some(children)
+            }
+        }
+    }
+
     /// Returns a single-line AST representation.
     pub fn get_text(&self) -> String {
         inline_print(self)

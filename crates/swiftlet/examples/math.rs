@@ -9,20 +9,19 @@ fn main() {
         t: "(" e ")" | n
         n: n D | D
         D: "0" .. "9"
-        %import WS
-        %ignore WS
+        %ignore (" ", "abc")
         "#;
 
     let conf = Arc::new(ParserOption {
         algorithm: Algorithm::CLR,
         start: "s".to_string(),
+        debug: true,
         ..Default::default()
     });
 
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let text = "(1+(4+3)+4+5)";
     if let Ok(parsed) = parser.parse(text) {
-        // #[cfg(feature = "debug")]
-        parsed.print();
+        parsed.pretty_print();
     }
 }

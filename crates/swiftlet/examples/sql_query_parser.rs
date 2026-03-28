@@ -13,7 +13,7 @@ fn parse_text(grammar: &str, text: &str) {
             ..Default::default()
         }
     );
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     let parsed = parser.parse(text);
     println!("Time elapsed: {:?}", current.elapsed());
     match  parsed{

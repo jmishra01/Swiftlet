@@ -9,7 +9,7 @@ fn main() {
     let texts = ["hello", "Hello", "HELLO", "HeLLo"];
 
     let conf = Arc::new(ParserOption::default());
-    let parser = Swiftlet::from_string(grammar, conf);
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
     for text in texts {
         match parser.parse(&text) {
             Ok(ast) => {

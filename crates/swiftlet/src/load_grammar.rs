@@ -7,8 +7,9 @@ use crate::grammar::{Algorithm, Rule, create_rules};
 use crate::lexer::{LexerConf, RegexFlag, Symbol, TerminalDef};
 use crate::parser_frontends::ParserConf;
 use crate::parser_frontends::ParserFrontend;
-use crate::transform::Transformer;
+use crate::transform::{fetch_terminals, RuleCompiler, TerminalCompiler};
 use crate::{ParserOption, terminal_def};
+use crate::error::ParserError;
 
 static RULES: LazyLock<HashMap<Arc<Symbol>, Vec<Arc<Rule>>>> = LazyLock::new(get_rules);
 
@@ -99,23 +100,18 @@ pub fn get_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
             vec!["terminal", "non_terminal", "string", "range", "regex"],
         ),
         ("?pars", vec!["_LPAR expansions _RPAR"]),
-        ("maybe", vec!["_LBAR expansions _RBAR"]),
+        ("maybe", vec!["_LBAR _or_expansion _RBAR"]),
         ("terminal", vec!["TERMINAL"]),
         ("non_terminal", vec!["RULE"]),
         ("string", vec!["STRING"]),
         ("regex", vec!["REGEXP"]),
         ("range", vec!["STRING _DOT_DOT STRING"]),
-        ("ignore", vec!["_IGNORE expansions _NL"]),
-        ("?name", vec!["terminal", "non_terminal"]),
-        (
-            "import",
-            vec![
-                "_IMPORT _import_args _NL",
-                "_IMPORT _LPAR _name_list _RPAR _NL",
-            ],
-        ),
-        ("_import_args", vec!["name", "_import_args _DOT name"]),
-        ("_name_list", vec!["name", "_name_list _COMMA name"]),
+        ("_term_str", vec!["terminal", "string"]),
+        ("_terminal", vec!["_term_str", "_terminal _COMMA _term_str"]),
+        ("ignore", vec!["_IGNORE value _NL",
+                        "_IGNORE _LPAR _terminal _RPAR _NL"]),
+        ("import", vec!["_IMPORT terminal _NL",
+                        "_IMPORT _LPAR _terminal _RPAR _NL"]),
     ])
 }
 
@@ -135,11 +131,10 @@ pub fn get_parser() -> Arc<ParserFrontend> {
 /// Parses grammar text and transforms it into a runnable parser frontend.
 ///
 /// Panics if grammar parsing or transformation fails.
-
 macro_rules! impl_load_grammar {
     ($( $extra_arg:ident : $extra_type:ty ),*) => {
         /// Loads a grammar definition into a ready-to-use parser frontend.
-        pub fn load_grammar(grammar: &str, $( $extra_arg : $extra_type ),*) -> Arc<ParserFrontend> {
+        pub fn load_grammar(grammar: &str, $( $extra_arg : $extra_type ),*) -> Result<Arc<ParserFrontend>, ParserError> {
             let tree = match GRAMMAR_BUILDER.parse(grammar) {
                 Ok(tree) => tree,
                 Err(e) => panic!("Failed to parse grammar. Error: {}", e)
@@ -153,23 +148,92 @@ macro_rules! impl_load_grammar {
                 }
             )*
 
-            let mut transformer = Transformer::new(get_common_terminals());
+            let common_terminals = get_common_terminals();
+            let mut terminals = if let Some(terminals) = tree.get_child_tree("term") {
+                let mut terminal_compiler = TerminalCompiler::new(terminals);
+                terminal_compiler.compile();
+                terminal_compiler.get_terminals()
+            } else {
+                vec![]
+            };
 
-            transformer.transform(&tree);
-            transformer.sort_terminals();
+            let mut update_terminals = |arg0: &String| {
+                if common_terminals.contains_key(arg0) {
+                    terminals.push(common_terminals.get(arg0).unwrap().clone());
+                } else {
+                    terminals.push(Arc::new(TerminalDef::with_regex(
+                        arg0,
+                        arg0,
+                        RegexFlag::default(),
+                        5
+                    )
+                    ));
+                }
+            };
 
-            let rules = transformer.get_grammar();
+            let ignores: Vec<String> = match tree.get_child_tree("ignore") {
+                Some(ignores) => {
+                    ignores
+                    .iter()
+                    .map(|ignore| fetch_terminals(ignore))
+                    .flatten()
+                    .collect::<Vec<_>>()
+                },
+                None => vec![],
+            };
+            ignores.iter().for_each(&mut update_terminals);
+
+            if let Some(imports) = tree.get_child_tree("import") {
+                imports
+                .iter()
+                .map(|ignore| fetch_terminals(ignore))
+                .flatten()
+                .for_each(|arg0: String| update_terminals(&arg0));
+            }
+            let rules = tree.get_child_tree("rule").unwrap();
+
+            let mut transformer = RuleCompiler::new(&common_terminals);
+
+            transformer.compile(rules);
+
+            let rules = match transformer.get_grammar() {
+                Ok(rules) => {
+                    rules
+                },
+                Err(e) => return Err(e)
+            };
+
+            terminals.extend(transformer.get_terminal());
+            terminals.sort_by(|first, second| {
+                second.priority.cmp(&first.priority)
+                .then(
+                    second.max_width.cmp(&first.max_width)
+                    .then(second.value.len().cmp(&first.value.len()))
+                )
+            });
+
             $(
                 if $extra_arg.debug {
-                    transformer.print_terminals();
-                    transformer.print_grammar();
+                    println!("\nTerminals");
+                    println!("=========");
+                    for t in terminals.iter() {
+                        println!("{t:?}");
+                    }
+
+                    println!("\nGrammar");
+                    println!("=======");
+                    for (_, prod) in rules.iter() {
+                        for p in prod.iter() {
+                            println!("{p:?}");
+                        }
+                    }
                 }
             )*
 
-            let parser_conf = Arc::new(ParserConf::new(rules, transformer.get_ignores()));
-            let lexer_conf = Arc::new(LexerConf::new(transformer.get_terminal()));
+            let parser_conf = Arc::new(ParserConf::new(rules, ignores));
+            let lexer_conf = Arc::new(LexerConf::new(terminals));
 
-            Arc::new(ParserFrontend::new(lexer_conf, parser_conf))
+            Ok(Arc::new(ParserFrontend::new(lexer_conf, parser_conf)))
         }
     };
 }

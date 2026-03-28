@@ -18,4 +18,6 @@ pub enum ParserError {
     FailedToParse(String),
     #[error("Didn't find any rule for word: \"{0}\" in the given grammar.")]
     RuleNotFound(String),
+    #[error("Rule '{0}' is used, but production rules are not defined.")]
+    RuleProductionNotFound(String),
 }

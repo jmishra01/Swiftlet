@@ -47,14 +47,16 @@ fn benchmark_constructor(rounds: usize, algorithm: &str) -> Vec<f64> {
     let mut samples = Vec::with_capacity(rounds);
     for _ in 0..rounds {
         let start = Instant::now();
-        let _parser = Swiftlet::from_string(grammar(), make_parser_option(algorithm));
+        let _parser = Swiftlet::from_string(grammar(), make_parser_option(algorithm))
+            .expect("failed to build parser");
         samples.push(start.elapsed().as_secs_f64());
     }
     samples
 }
 
 fn benchmark_parse(rounds: usize, algorithm: &str, text: &str) -> Vec<f64> {
-    let parser = Swiftlet::from_string(grammar(), make_parser_option(algorithm));
+    let parser = Swiftlet::from_string(grammar(), make_parser_option(algorithm))
+        .expect("failed to build parser");
     let _ = parser.parse(text).unwrap();
 
     let mut samples = Vec::with_capacity(rounds);

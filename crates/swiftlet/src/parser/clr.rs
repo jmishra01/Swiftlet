@@ -1,4 +1,4 @@
-use crate::parser::error::ParserError;
+use crate::error::ParserError;
 use crate::{
     ParserOption,
     grammar::{Rule, RuleOption},

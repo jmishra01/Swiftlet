@@ -19,7 +19,7 @@ fn main() {
         ..Default::default()
     });
 
-    let text_parser = Swiftlet::from_string(text, conf);
+    let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
     if let Ok(_res) = text_parser.parse("1 + 2 + 4") {
         _res.pretty_print();
     }
