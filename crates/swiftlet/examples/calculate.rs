@@ -1,49 +1,42 @@
+use swiftlet::preclude::*;
 use std::sync::Arc;
-use swiftlet::ast::AST;
-use swiftlet::grammar::Algorithm;
-use swiftlet::{ParserOption, Swiftlet};
 
-fn calculate(ast: &AST) -> i64 {
+
+fn calculate(ast: &AST) -> i32 {
     match ast {
-        AST::Token(token) => token.word().parse::<i64>().unwrap(),
-        AST::Tree(rule, children) => match rule.as_str() {
-            "start" | "expr" | "term" => calculate(&children[0]),
-            "add" => calculate(&children[0]) + calculate(&children[2]),
-            "sub" => calculate(&children[0]) - calculate(&children[2]),
-            "mul" => calculate(&children[0]) * calculate(&children[2]),
-            "div" => calculate(&children[0]) / calculate(&children[2]),
-            _ => panic!("{} Rule not found in the AST tree", rule),
-        },
+        AST::Token(token) => {
+            token.word().parse::<i32>().unwrap()
+        }
+        AST::Tree(tree, children) => {
+            match tree.as_str() {
+                "start" | "expr" => calculate(&children[0]),
+                "add" => calculate(&children[0]) + calculate(&children[2]),
+                "sub" => calculate(&children[0]) - calculate(&children[2]),
+                _ => {
+                    panic!("Invalid tree: {}", tree);
+                }
+            }
+        }
     }
 }
 
 fn main() {
     let grammar = r#"
         start: expr
-        expr: expr "+" term -> add
-            | expr "-" term -> sub
-            | term
-        term: term "*" INT -> mul
-            | term "/" INT -> div
+        expr: expr "+" INT -> add
+            | expr "-" INT -> sub
             | INT
         %import (WS, INT)
         %ignore WS
         "#;
 
-    let text = "10 * 5 - 8 / 2 + 20";
+    let conf = Arc::new(ParserOption::default());
+    let parser = Swiftlet::from_string(grammar, conf).expect("failed to get parser");
+    let text = "10 - 2 + 5 - 2";
 
-    let conf = Arc::new(ParserOption {
-        algorithm: Algorithm::CLR,
-        debug: true,
-        ..Default::default()
-    });
-    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
-    let parsed_text = parser.parse(&text);
-
-    match parsed_text {
+    match parser.parse(text) {
         Ok(tree) => {
-            tree.print();
-            tree.pretty_print();
+            println!("AST: "); tree.pretty_print();
             println!("Total: {}", calculate(&tree));
         }
         Err(e) => {
