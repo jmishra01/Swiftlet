@@ -22,58 +22,68 @@ and developer-friendly framework for building custom parsers, interpreters, and 
 ## Example
 
 ```rust
-use swiftlet::{Swiftlet, ParserOption, lexer::AST};
+use swiftlet::preclude::*;
 use std::sync::Arc;
 
-
 fn calculate(ast: &AST) -> i32 {
-    match ast {
-        AST::Token(token) => {
-            token.word.parse::<i32>().unwrap()
-        }
-        AST::Tree(tree, children) => {
-            match tree.as_str() {
-                "start" | "expr" => calculate(&children[0]),
-                "add" => calculate(&children[0]) + calculate(&children[2]),
-                "sub" => calculate(&children[0]) - calculate(&children[2]),
-                _ => {
-                    panic!("Invalid tree: {}", tree);
-                }
-            }
-        }
+  match ast {
+    AST::Token(token) => {
+      token.word().parse::<i32>().unwrap()
     }
+    AST::Tree(tree, children) => {
+      match tree.as_str() {
+        "start" | "expr" => calculate(&children[0]),
+        "add" => calculate(&children[0]) + calculate(&children[2]),
+        "sub" => calculate(&children[0]) - calculate(&children[2]),
+        _ => {
+          panic!("Invalid tree: {}", tree);
+        }
+      }
+    }
+  }
 }
 
 fn main() {
-    let grammar = r#"
+  let grammar = r#"
         start: expr
         expr: expr "+" INT -> add
             | expr "-" INT -> sub
             | INT
         %import (WS, INT)
         %ignore WS
-        "#
-        .to_string();
+        "#;
 
-    let conf = Arc::new(ParserOption::default());
-    let mut parser = Swiftlet::from_string(grammar, conf);
-    let text = "10 - 2 + 5 - 2";
+  let conf = Arc::new(ParserOption::default());
+  let parser = Swiftlet::from_string(grammar, conf).expect("failed to get parser");
+  let text = "10 - 2 + 5 - 2";
 
-    match parser.parse(text) {
-        Ok(tree) => {
-            print!("AST: "); tree.print();
-            println!("Total: {}", calculate(&tree));
-        }
-        Err(e) => {
-            println!("Error: {}", e);
-        }
+  match parser.parse(text) {
+    Ok(tree) => {
+      println!("AST: "); tree.pretty_print();
+      println!("Total: {}", calculate(&tree));
     }
+    Err(e) => {
+      println!("Error: {}", e);
+    }
+  }
 }
 ```
 
 **Output**
 ```terminaloutput
-AST: Tree("start", [Tree("expr", [Tree("sub", [Tree("expr", [Tree("add", [Tree("expr", [Tree("sub", [Tree("expr", ["10"]), "-", "2"])]), "+", "5"])]), "-", "2"])])])
+AST: 
+start
+  sub
+    add
+      sub
+        expr  10
+        -
+        2
+      +
+      5
+    -
+    2
+    
 Total: 11
 ```
 
