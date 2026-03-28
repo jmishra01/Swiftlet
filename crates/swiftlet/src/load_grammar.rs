@@ -211,6 +211,12 @@ macro_rules! impl_load_grammar {
                     .then(second.value.len().cmp(&first.value.len()))
                 )
             });
+            terminals.dedup_by(|first, second| {
+                first.get_name() == second.get_name()
+                    && first.value == second.value
+                    && first.priority == second.priority
+                    && first.max_width == second.max_width
+            });
 
             $(
                 if $extra_arg.debug {
