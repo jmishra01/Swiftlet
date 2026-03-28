@@ -192,7 +192,7 @@ macro_rules! impl_load_grammar {
             }
             let rules = tree.get_child_tree("rule").unwrap();
 
-            let mut transformer = RuleCompiler::new(&common_terminals);
+            let mut transformer = RuleCompiler::new();
 
             transformer.compile(rules);
 
@@ -290,7 +290,7 @@ mod tests {
         %import WS
         %ignore WS
         "#,
-        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "start")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "T")])])]), Tree("term", [Tree("terminal", [Token(TERMINAL, "T")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""a"")])])]), Tree("import", [Tree("terminal", [Token(TERMINAL, "WS")])]), Tree("ignore", [Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "WS")])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "start")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "T")])])]), Tree("term", [Tree("terminal", [Token(TERMINAL, "T")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""a"")])])]), Tree("import", [Tree("terminal", [Token(TERMINAL, "WS")])]), Tree("ignore", [Tree("terminal", [Token(TERMINAL, "WS")])])])"#
     );
 
     make_test_case!(
@@ -366,7 +366,7 @@ mod tests {
         %import (WS, INT)
         %ignore WS
         "#,
-        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("import", [Tree("terminal", [Token(TERMINAL, "WS")]), Tree("terminal", [Token(TERMINAL, "INT")])]), Tree("ignore", [Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "WS")])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("import", [Tree("terminal", [Token(TERMINAL, "WS")]), Tree("terminal", [Token(TERMINAL, "INT")])]), Tree("ignore", [Tree("terminal", [Token(TERMINAL, "WS")])])])"#
     );
 
     make_test_case!(
@@ -380,6 +380,6 @@ mod tests {
         %import (WS, INT)
         %ignore WS
         "#,
-        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""*"")]), Tree("string", [Token(STRING, ""\"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "d")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "d")]), Tree("or_expansion", [Tree("expansion", [Tree("string", [Token(STRING, ""("")]), Tree("non_terminal", [Token(RULE, "e")]), Tree("string", [Token(STRING, "")"")])]), Tree("non_terminal", [Token(RULE, "v")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "v")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("import", [Tree("terminal", [Token(TERMINAL, "WS")]), Tree("terminal", [Token(TERMINAL, "INT")])]), Tree("ignore", [Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "WS")])])])])"#
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""*"")]), Tree("string", [Token(STRING, ""\"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "d")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "d")]), Tree("or_expansion", [Tree("expansion", [Tree("string", [Token(STRING, ""("")]), Tree("non_terminal", [Token(RULE, "e")]), Tree("string", [Token(STRING, "")"")])]), Tree("non_terminal", [Token(RULE, "v")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "v")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("import", [Tree("terminal", [Token(TERMINAL, "WS")]), Tree("terminal", [Token(TERMINAL, "INT")])]), Tree("ignore", [Tree("terminal", [Token(TERMINAL, "WS")])])])"#
     );
 }

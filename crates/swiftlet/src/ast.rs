@@ -13,7 +13,7 @@ impl AST {
     pub fn get_tree_name(&self) -> Option<&String> {
         match self {
             AST::Tree(name, _) => Some(name),
-            _ => None,
+            _ => unreachable!(),
         }
     }
 
@@ -55,12 +55,10 @@ impl AST {
     }
 
     pub fn get_children(&self) -> Option<&Vec<AST>> {
-        match self {
-            AST::Token(_) => None,
-            AST::Tree(_, children) => {
-                Some(children)
-            }
+        if let AST::Tree(_, children) = self {
+            return Some(children)
         }
+        None
     }
 
     /// Returns a single-line AST representation.
@@ -192,21 +190,107 @@ fn pretty_print(tree: &AST, space: String) {
 mod tests {
     use super::*;
     use crate::lexer::Symbol;
+
+    fn token_ast(word: &str, terminal: &str) -> AST {
+        AST::Token(Arc::new(Token::new(
+            Arc::<str>::from(word),
+            0,
+            word.len(),
+            0,
+            Arc::new(Symbol::Terminal(terminal.to_string())),
+        )))
+    }
+
+    fn sample_tree() -> AST {
+        AST::Tree(
+            "root".to_string(),
+            vec![
+                AST::Tree("expr".to_string(), vec![token_ast("a", "IDENT")]),
+                AST::Tree(
+                    "_hidden".to_string(),
+                    vec![
+                        AST::Tree("expr".to_string(), vec![token_ast("b", "IDENT")]),
+                        AST::Tree("leaf".to_string(), vec![token_ast("c", "__RAW")]),
+                    ],
+                ),
+            ],
+        )
+    }
+
     #[test]
-    fn ast_helpers_work_for_tree_and_token() {
-        let tok = Arc::new(Token::new(
-            Arc::<str>::from("hello"),
-            0,
-            5,
-            0,
-            Arc::new(Symbol::Terminal("_WS".to_string())),
-        ));
-        let ast_tok = AST::Token(tok);
+    fn ast_struct_and_basic_helpers_work() {
+        let ast_tok = token_ast("hello", "_WS");
         let ast_tree = AST::Tree("node".to_string(), vec![ast_tok.clone()]);
 
         assert_eq!(ast_tree.get_tree_name(), Some(&"node".to_string()));
         assert!(ast_tok.is_start_with_underscore());
         assert!(!ast_tree.is_start_with_underscore());
+        assert_eq!(ast_tree.get_children().map(Vec::len), Some(1));
+        assert_eq!(ast_tok.get_children(), None);
+        assert_eq!(ast_tree.get_last_child(), Some(&ast_tok));
+        assert_eq!(ast_tok.get_last_child(), None);
         assert!(ast_tree.get_text().starts_with("Tree(\"node\""));
+    }
+
+    #[test]
+    fn tree_search_helpers_find_expected_nodes() {
+        let tree = sample_tree();
+
+        assert!(tree.is_tree_exist("expr"));
+        assert!(tree.is_tree_exist("leaf"));
+        assert!(!tree.is_tree_exist("missing"));
+
+        let first_expr = tree.get_tree("expr");
+        assert!(matches!(first_expr, Some(AST::Tree(name, _)) if name == "expr"));
+
+        let expr_nodes = tree.get_child_tree("expr").expect("expr nodes should exist");
+        assert_eq!(expr_nodes.len(), 2);
+
+        let leaf_nodes = tree.get_child_tree("leaf").expect("leaf nodes should exist");
+        assert_eq!(leaf_nodes.len(), 1);
+
+        assert!(matches!(tree.get_tree("missing"), None));
+        assert_eq!(token_ast("x", "IDENT").get_child_tree("expr"), None);
+    }
+
+    #[test]
+    fn iter_trees_yields_matches_in_depth_first_left_to_right_order() {
+        let tree = sample_tree();
+
+        let names = tree
+            .iter_trees("expr")
+            .map(|ast| ast.get_tree_name().expect("tree nodes only").clone())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["expr".to_string(), "expr".to_string()]);
+    }
+
+    #[test]
+    fn inline_print_formats_tokens_and_trees() {
+        let regular_token = token_ast("abc", "IDENT");
+        let hidden_token = token_ast(" ", "__WS");
+        let tree = AST::Tree(
+            "pair".to_string(),
+            vec![regular_token.clone(), hidden_token.clone()],
+        );
+
+        assert_eq!(inline_print(&regular_token), r#"Token(IDENT, "abc")"#);
+        assert_eq!(inline_print(&hidden_token), " ");
+        assert_eq!(
+            inline_print(&tree),
+            r#"Tree("pair", [Token(IDENT, "abc"),  ])"#
+        );
+        assert_eq!(tree.get_text(), inline_print(&tree));
+    }
+
+    #[test]
+    fn pretty_print_handles_token_and_tree_inputs_without_panicking() {
+        let token = token_ast("abc", "IDENT");
+        let tree = sample_tree();
+
+        pretty_print(&token, String::new());
+        pretty_print(&tree, String::new());
+        token.print();
+        tree.pretty_print();
     }
 }

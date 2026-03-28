@@ -50,8 +50,9 @@ fn bench_func(c: &mut Criterion) {
                     algorithm: Algorithm::CLR,
                     ..Default::default()
                 });
-                let clr_parser = Swiftlet::from_string(g, conf);
-                let _ = clr_parser.parse(t);
+                if let Ok(clr_parser) = Swiftlet::from_string(g, conf) {
+                    let _ = clr_parser.parse(t);
+                }
             })
         });
 
@@ -60,8 +61,9 @@ fn bench_func(c: &mut Criterion) {
         c.bench_function(earley_bench_name.as_str(), |b| {
             b.iter(|| {
                 let conf = Arc::new(ParserOption::default());
-                let parser = Swiftlet::from_string(g, conf);
-                let _ = parser.parse(t);
+                if let Ok(parser) = Swiftlet::from_string(g, conf) {
+                    let _ = parser.parse(t);
+                }
             })
         });
     }

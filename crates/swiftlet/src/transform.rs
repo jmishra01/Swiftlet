@@ -99,27 +99,16 @@ impl<'a> TerminalCompiler<'a> {
         }
 
         let mut pattern = if flags.len() > 0 {
-            format!("({}?:{})", flags, pattern.to_string())
+            format!("(?{}:{})", flags, pattern.to_string())
         } else {
             pattern.to_string()
         };
         if capture.contains("m") {
-            pattern = format!("(m?:^{})", pattern);
+            pattern = format!("(?m:^{})", pattern);
         }
         Some(pattern)
     }
 
-    fn _or_expansion(&mut self, child: &[AST]) -> OptStr {
-        let val = child
-            .iter()
-            .filter_map(|val| self._transform(val))
-            .collect::<Vec<String>>();
-
-        if val.len() > 1 {
-            return Some(format!("({})", val.join("|")));
-        }
-        Some(val.first().unwrap().to_string())
-    }
 
     fn _maybe(&mut self, child: &[AST]) -> OptStr {
         let first = child.first().unwrap();
@@ -132,20 +121,48 @@ impl<'a> TerminalCompiler<'a> {
         let second = child.last().unwrap();
         let sign = self._transform(second)?;
 
-        let terminal = self._transform(first)?;
-        let is_contains = self.map.contains_key(&terminal);
-        if !is_contains{
-            for index in (self.index + 1)..self.terminal_len {
-                let terminal = self.terminals[index];
-                self._transform(terminal);
+        match first {
+            AST::Tree(name, _) => {
+                match name.as_str() {
+                    "terminal" => {
+                        let terminal = self._transform(first)?;
+                        let is_contains = self.map.contains_key(&terminal);
+                        if !is_contains {
+                            for index in (self.index + 1)..self.terminal_len {
+                                let terminal = self.terminals[index];
+                                self._transform(terminal);
+                            }
+                        }
+                        let value = self.map.get(&terminal).unwrap();
+                        Some(format!("({}){}", value.value, sign))
+                    },
+                    _ => {
+                        let value = self._transform(first)?;
+                        Some(format!("{}{}", value, sign))
+                    },
+                }
             }
+            _ => unreachable!()
         }
-        let value = self.map.get(&terminal).unwrap();
+    }
 
-        Some(format!("({}){}", value.value, sign))
+    fn _or_expansion(&mut self, child: &[AST]) -> OptStr {
+        let val = self._resolve_internal_terminal(child)?;
+        if val.len() > 1 {
+            return Some(format!("({})", val.join("|")));
+        }
+        Some(val.first().unwrap().to_string())
     }
 
     fn _expansion(&mut self, child: &[AST]) -> OptStr {
+        match self._resolve_internal_terminal(child) {
+            Some(arr) => Some(arr.join("")),
+            None => None
+        }
+    }
+
+    fn _resolve_internal_terminal(&mut self, child: &[AST]) -> OptVecStr {
+
         Some(
             child
             .iter()
@@ -182,7 +199,6 @@ impl<'a> TerminalCompiler<'a> {
                 }
             })
             .collect::<Vec<_>>()
-            .join("")
         )
     }
 
@@ -252,22 +268,18 @@ fn origin_apply(name: &str, priority: usize, alias_rule: OptVecStr) -> (String, 
 }
 
 /// Converts grammar-parser AST nodes into parser rules and terminal definitions.
-pub struct RuleCompiler<'a> {
+pub struct RuleCompiler {
     terminal: Vec<Arc<TerminalDef>>,
-    ignores: Vec<String>,
-    common_terminals: &'a HashMap<String, Arc<TerminalDef>>,
     count: usize,
     cache: HashMap<String, String>,
     rules: HashMap<Arc<Symbol>, Vec<Arc<Rule>>>,
 }
 
-impl<'a> RuleCompiler<'a> {
+impl RuleCompiler {
     /// Creates an empty transformer with shared built-in terminals.
-    pub fn new(common_terminals: &'a HashMap<String, Arc<TerminalDef>>) -> Self {
+    pub fn new() -> Self {
         Self {
             terminal: Vec::new(),
-            ignores: Vec::new(),
-            common_terminals,
             count: 0usize,
             cache: HashMap::new(),
             rules: HashMap::new(),
@@ -289,24 +301,9 @@ impl<'a> RuleCompiler<'a> {
         Ok(self.rules.clone())
     }
 
-    /// Sorts terminals by descending max width for longest-match behavior.
-    pub(crate) fn sort_terminals(&mut self) {
-        self.terminal.sort_by(|a, b| {
-            b.priority.cmp(&a.priority)
-                .then(
-                    b.max_width.cmp(&a.max_width)
-                        .then(b.value.len().cmp(&a.value.len())))
-        }
-        );
-    }
-
     /// Returns generated terminals.
     pub fn get_terminal(&self) -> Vec<Arc<TerminalDef>> {
         self.terminal.clone()
-    }
-    /// Returns collected ignore directives.
-    pub fn get_ignores(&self) -> Vec<String> {
-        self.ignores.clone()
     }
 
     #[inline]
@@ -472,45 +469,6 @@ impl<'a> RuleCompiler<'a> {
         None
     }
 
-    // #[inline]
-    // /// Transforms a terminal declaration node.
-    // fn term(&mut self, tree: &[AST]) -> OptVecStr {
-    //     let first = tree[0].clone();
-    //     let second = tree[1].clone();
-    //     let term_name = self._transform(&first);
-    //     let prod = self._transform(&second).unwrap();
-    //     let prod_sym: Arc<Symbol> = Arc::new(Symbol::Terminal(prod.first().unwrap().to_string()));
-    //     let priority = if second.is_tree_exist("regex") { 5 } else { 10 };
-    //
-    //     if let Some(index) = self.terminal.iter().position(|x| x.get_name() == prod_sym) {
-    //         let val = self.terminal.remove(index);
-    //         self.terminal.push(Arc::new(TerminalDef {
-    //             name: Arc::new(Symbol::Terminal(
-    //                 term_name.unwrap().first().unwrap().clone(),
-    //             )),
-    //             value: val.value.clone(),
-    //             pattern: val.pattern.clone(),
-    //             max_width: val.max_width,
-    //             priority,
-    //         }));
-    //     } else {
-    //         // Else used to transform below grammar pattern
-    //         /*
-    //             start: NAME
-    //             NAME: CNAME
-    //             %import (CNAME)
-    //          */
-    //         self.terminal.push(terminal_def!(
-    //             term_name.unwrap().first().unwrap(),
-    //             prod.first().unwrap(),
-    //             RegexFlag::default(),
-    //             10
-    //         ));
-    //     }
-    //
-    //     None
-    // }
-
     #[inline]
     /// Transforms a string range node into a character class regex.
     fn range(&mut self, tree: &[AST]) -> OptVecStr {
@@ -565,39 +523,6 @@ impl<'a> RuleCompiler<'a> {
     }
 
     #[inline]
-    /// Processes root start node in two passes: terminals first, then rules.
-    fn start(&mut self, tree: &[AST]) -> OptVecStr {
-        for node in tree.iter() {
-            if let Some(name) = node.get_tree_name()
-                && name.cmp(&"terminal".to_string()).is_eq()
-            {
-                self._transform(node);
-            }
-        }
-        for node in tree.iter() {
-            if let Some(name) = node.get_tree_name()
-                && name.cmp(&"terminal".to_string()).is_ne()
-            {
-                self._transform(node);
-            }
-        }
-        None
-    }
-
-    #[inline]
-    /// Collects ignore terminal names from ignore directives.
-    fn ignore(&mut self, tree: &[AST]) -> OptVecStr {
-        for node in tree.iter() {
-            if let Some(v) = self._transform(node) {
-                for i in v.iter() {
-                    self.ignores.push(i.clone());
-                }
-            }
-        }
-        None
-    }
-
-    #[inline]
     /// Transforms parenthesized expressions into a helper rule.
     fn pars(&mut self, tree: &[AST]) -> OptVecStr {
         let mut v_result: Vec<String> = Vec::new();
@@ -628,20 +553,6 @@ impl<'a> RuleCompiler<'a> {
             .trim()
             .to_string();
         Some(vec![v_result, "".to_string()])
-    }
-
-    /// Imports requested common terminals into the current grammar.
-    fn import(&mut self, tree: &[AST]) -> OptVecStr {
-        for x in tree.iter(){
-            if let Some(words) = self._transform(x) {
-                for w in words.iter() {
-                    if self.common_terminals.contains_key(w) {
-                        self.terminal.push(self.common_terminals.get(w).unwrap().clone());
-                    }
-                }
-            }
-        }
-        None
     }
 
     /// Returns parsed priority token.
@@ -714,18 +625,14 @@ impl<'a> RuleCompiler<'a> {
                 "terminal" | "non_terminal" => self.terminal_non_terminal(tree),
                 "expansions" | "expansion" => self.expansions(tree),
                 "or_expansion" => self.or_expansion(tree),
+                "op_expansion" => self.op_expansion(tree),
                 "rule" => self.rule(tree),
-                // "term" => self.term(tree),
                 "range" => self.range(tree),
                 "string" => self.string(tree),
-                "start" => self.start(tree),
                 "alias" => self.alias(tree),
-                "ignore" => self.ignore(tree),
                 "pars" => self.pars(tree),
                 "maybe" => self.maybe(tree),
                 "priority" => self.priority(tree),
-                "op_expansion" => self.op_expansion(tree),
-                "import" | "name_list" => self.import(tree),
                 "regex" => self.regex(tree),
                 _ => panic!("not matched, {name}"),
             },
