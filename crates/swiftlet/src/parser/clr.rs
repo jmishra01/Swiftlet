@@ -302,9 +302,25 @@ impl Clr {
                 .map(|x| x.name())
                 .collect::<Vec<String>>()
                 .join("-");
+
+            let message = match conflict.as_str() {
+                "Reduce-Reduce" => {
+                    let n = match lr_table.first().unwrap() {
+                        ActionTable::Reduce(r) => r,
+                        _ => unreachable!(),
+                    };
+                    let rule = self.rules.get(*n).unwrap();
+                    format!("Two rules reduce to same terminal: \"{}\"", rule.expansion.first().unwrap().get_value())
+                },
+                _ => {
+                    "".to_string()
+                }
+            };
+
             Err(ParserError::Conflict {
                 lr_table: lr_table.clone(),
                 conflict,
+                message,
             })
         }
     }
@@ -604,7 +620,7 @@ fn debug_clr_rules(rules: &[Arc<Rule>]) {
     println!("============================");
 
     for (index, rule) in rules.iter().enumerate() {
-        println!("\t{:<2}; {:?}", index, rule);
+        println!("\t{:<2}; {}", index, rule);
     }
     println!();
 }

@@ -4,28 +4,26 @@ const GRAMMAR: &str = r#"
     start: column_expr
     column_expr: func
          | column
-         | string
          | case
          | literal
          | condition
-    func: FUNC_NAME "(" args ")"
-    args: column ("," column)*
-    case: "case"i when_stmt+ else_stmt? END
+         | NULL
+    func: func_name "(" args ")"
+    args: column_expr ("," column_expr)*
+    case: "case"i when_stmt+ else_stmt? "end"i
     when_stmt: "when"i column_expr "then"i column_expr
     else_stmt: "else"i column_expr
-    END: "end"i
-    condition: column comparator literal
+    condition: column_expr comparator literal
     comparator: "=" -> eq
         | "!=" -> ne
         | ">=" -> ge
         | "<=" -> le
         | "<" -> gt
         | ">" -> lt
-    string: "'" sentence+ "'"
-    sentence: NAME | literal
     column: NAME
-    literal: INT | DECIMAL
-    FUNC_NAME: /[a-zA-Z][a-zA-Z_]+]/
+    func_name: NAME
+    literal: INT | DECIMAL | STRING
+    STRING: /'[a-zA-Z0-9_ ]+'/
     NAME: /[a-zA-Z][a-zA-Z1-9_]+/
     %import (WS, INT, DECIMAL)
     %ignore WS
@@ -34,21 +32,31 @@ const GRAMMAR: &str = r#"
 fn main() {
     let parser_opt = Arc::new(
         ParserOption {
-            debug: true,
             algorithm: Algorithm::CLR,
             ..Default::default()
         }
     );
     match Swiftlet::from_string(GRAMMAR, parser_opt) {
         Ok(parser) => {
-            let text = "case when Sales > 10 then 'Greater than 10' else 'Less than 10' end";
-            match parser.parse(text) {
-                Ok(ast) => {
-                    ast.pretty_print();
-                },
-                Err(err) => {
-                    println!("{}", err);
-                }
+            let texts = [
+                "sum(Sales)",
+                "IF_NULL(Sales, 1)",
+                "IF_ZERO(Sales, NULL)",
+                "sum(Sales > 5)",
+                "sum(case when Sales > 5 then 1 else 2 end)",
+                "sum(Sales) > 20",
+                "case when Sales > 10 then 'Greater than 10' else 'Less than 10' end",
+                "case when Sales > 10 then 'Greater than 10' end",
+                "case when sum(Sales) > 10 then 'Aggregate value is greater than 10' else 'Aggregate value is less than or equals to 10' end",
+            ];
+            for text in texts {
+                println!("{}", "-".repeat(text.len() + 6));
+                println!("Text: {}", text);
+                println!("{}", "-".repeat(text.len() + 6));
+                let parsed = parser.parse(text);
+                println!("AST =>");
+                parsed.unwrap().pretty_print();
+                println!("\n");
             }
         },
         Err(err) => {
