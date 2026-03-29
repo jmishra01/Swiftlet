@@ -341,8 +341,8 @@ impl Iterator for Tokenizer {
                     .join(", ");
 
                 panic!(
-                    "Failed during tokenization at location {} of input text: \"{}\", expecting one of the following terminals: ({}).",
-                    previous_start, self.text, expected_next_token
+                    "Failed during tokenization at location {} of input text, expecting one of the following terminals: ({}).\n{}\n{}^",
+                    previous_start, expected_next_token, self.text, " ".repeat(previous_start)
                 );
             }
         }

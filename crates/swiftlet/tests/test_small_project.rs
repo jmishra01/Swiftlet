@@ -34,14 +34,50 @@ multi_test!(
     select_stmt: "select"i columns "from"i table_name
     columns: "*" | _columns
     _columns: column ("," column)*
-    column: NAME
+    column: NAME ("as" alias)?
     table_name: NAME | "(" start ")" "as"i alias
     alias: NAME
     NAME: /[a-zA-Z][a-zA-Z1-9_]+/
     %import WS
     %ignore WS
     "#,
-    "select col1, col2 from stat_table",
+    "select col1, col2 from (select col3 as col1, col4 as col2 from stat_table) as tb1",
+    "start",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+multi_test!(
+    rule_clr_sql_column_expr,
+    rule_earley_sql_column_expr,
+    r#"
+    start: column_expr
+    column_expr: func
+         | column
+         | string
+         | case
+         | literal
+         | condition
+    func: FUNC_NAME "(" args ")"
+    args: column ("," column)*
+    case: "case"i ("when"i column_expr "then" column_expr)+ ("else" column_expr)? "end"
+    condition: column_expr comparator literal
+    comparator: "=" -> eq
+        | "!=" -> ne
+        | ">=" -> ge
+        | "<=" -> le
+        | "<" -> gt
+        | ">" -> lt
+    string: "'" sentence "'"
+    sentence: NAME NAME*
+    column: NAME
+    literal: INT | DECIMAL
+    FUNC_NAME: /[a-zA-Z][a-zA-Z_]+]/
+    NAME: /[a-zA-Z][a-zA-Z1-9_]+/
+    %import (WS, INT, DECIMAL)
+    %ignore WS
+    "#,
+    "case Sales > 10 then 'Greater than 10' else 'Less than 10' end",
     "start",
     Algorithm::CLR,
     Algorithm::Earley

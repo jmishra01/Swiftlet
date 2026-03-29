@@ -301,7 +301,7 @@ impl Parser for EarleyParser {
 
             #[cfg(feature = "debug")]
             if self.parser_config.debug {
-                println!("Index: {} | {:?}", i, token);
+                println!("Index: {} | {}", i, if let Some(t) = token { t.to_string() } else {"None".to_string()});
                 for state in chart[i].states.iter() {
                     println!("\tState: {}", state);
                 }
