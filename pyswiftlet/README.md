@@ -21,8 +21,29 @@ pip install swiftlet
 ## Example
 
 ```python
-from swiftlet import Swiftlet
+from swiftlet import Swiftlet, Transformer
 
+class Calculate(Transformer):
+    def start(self, child):
+        return child[0]
+    
+    def expr(self, child):
+        return child[0]
+    
+    def add(self, child):
+        return child[0] + child[2]
+    
+    def sub(self, child):
+        return child[0] - child[2]
+    
+    def mul(self, child):
+        return child[0] * child[2]
+    
+    def div(self, child):
+        return child[0] / child[1]
+    
+    def terms(self, child):
+        return child[0]
 
 def main():
     grammar = """
@@ -37,16 +58,41 @@ def main():
     %ignore WS
     """
 
-    text = "12 + 10 - 8 * 20 + 4"
+    text = "12 + 10 - 8 * 2 + 4"
     parser = Swiftlet(grammar)
-    tree = parser.parse(text)
+    parsed_text = parser.parse(text)
+    
+    calculate = Calculate()
+    result = calculate(parsed_text)
 
-    tree.pretty_print()
+    parsed_text.pretty_print()
+    print("\nResult: ", result)
 
 
 if __name__ == "__main__":
     main()
 ```
+**Output**
+```
+start
+   add
+     sub
+       add
+         expr
+           terms   12
+         +
+         terms   10
+       -
+       mul
+         terms   8
+         *
+         2
+     +
+     terms   4
+
+Result:  10
+```
+
 
 ## Usage
 
