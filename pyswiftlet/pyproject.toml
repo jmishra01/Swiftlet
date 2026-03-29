@@ -13,3 +13,6 @@ requires-python = ">=3.10"
 bindings = "pyo3"
 python-source = "python"
 module-name = "swiftlet._swiftlet"
+
+[project.urls]
+Homepage = "https://github.com/jmishra01/Swiftlet"
