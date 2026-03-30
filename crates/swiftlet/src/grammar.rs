@@ -1,6 +1,6 @@
 use crate::lexer::{Symbol, get_symbol};
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -44,7 +44,7 @@ impl RuleOption {
 }
 
 /// Represents a single grammar production.
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct Rule {
     pub(crate) origin: Arc<Symbol>,
     pub(crate) expansion: Vec<Arc<Symbol>>,
@@ -79,7 +79,7 @@ impl Rule {
     }
 }
 
-impl Debug for Rule {
+impl Display for Rule {
     /// Formats rule as `origin -> expansion...`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let lhs = self.origin.as_ref().as_str();
@@ -156,7 +156,7 @@ mod tests {
 
         assert_eq!(rule.len(), 2);
         assert!(!rule.is_expand());
-        assert_eq!(format!("{rule:?}"), "start -> expr INT");
+        assert_eq!(format!("{rule}"), "start -> expr INT");
     }
 
     #[test]

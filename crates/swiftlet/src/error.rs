@@ -7,10 +7,11 @@ use thiserror::Error;
 /// Enumerates parser construction and runtime failures.
 #[derive(Debug, Error)]
 pub enum ParserError {
-    #[error("LR Table: {lr_table:?}\n{conflict} conflict.")]
+    #[error("Conflict: Ambiguous Grammar Detected ({conflict}) | {message} | {lr_table:?}\nRun with debug: true, for more details.")]
     Conflict {
         lr_table: IndexSet<ActionTable>,
         conflict: String,
+        message: String,
     },
     #[error("Didn't find transition for non-terminal: {0:?}")]
     TransitionError(Arc<Symbol>),
