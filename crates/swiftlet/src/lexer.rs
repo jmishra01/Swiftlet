@@ -426,6 +426,96 @@ mod tests {
     }
 
     #[test]
+    fn token_accessors_and_terminal_name_work() {
+        let tk = Token::new(
+            Arc::<str>::from("alpha beta"),
+            6,
+            10,
+            3,
+            Arc::new(Symbol::Terminal("WORD".to_string())),
+        );
+
+        assert_eq!(tk.get_start(), 6);
+        assert_eq!(tk.get_end(), 10);
+        assert_eq!(tk.get_line(), 3);
+        assert_eq!(tk.get_terminal(), "WORD".to_string());
+        assert_eq!(tk.word(), "beta");
+    }
+
+    #[test]
+    fn token_word_falls_back_to_source_for_invalid_bounds() {
+        let reversed = Token::new(
+            Arc::<str>::from("hello"),
+            4,
+            2,
+            0,
+            Arc::new(Symbol::Terminal("TEXT".to_string())),
+        );
+        let beyond_end = Token::new(
+            Arc::<str>::from("hello"),
+            0,
+            10,
+            0,
+            Arc::new(Symbol::Terminal("TEXT".to_string())),
+        );
+
+        assert_eq!(reversed.word(), "hello");
+        assert_eq!(beyond_end.word(), "hello");
+    }
+
+    #[test]
+    fn token_display_contains_core_metadata() {
+        let tk = Token::new(
+            Arc::<str>::from("sum"),
+            0,
+            3,
+            1,
+            Arc::new(Symbol::Terminal("IDENT".to_string())),
+        );
+
+        assert_eq!(
+            tk.to_string(),
+            "Token { word: sum, start: 0, end: 3, line: 1, terminal: Terminal(IDENT)  }"
+        );
+    }
+
+    #[test]
+    fn token_equality_depends_on_word_line_and_terminal() {
+        let lhs = Token::new(
+            Arc::<str>::from("abc def"),
+            0,
+            3,
+            2,
+            Arc::new(Symbol::Terminal("IDENT".to_string())),
+        );
+        let same = Token::new(
+            Arc::<str>::from("abc xyz"),
+            0,
+            3,
+            2,
+            Arc::new(Symbol::Terminal("IDENT".to_string())),
+        );
+        let different_line = Token::new(
+            Arc::<str>::from("abc def"),
+            0,
+            3,
+            4,
+            Arc::new(Symbol::Terminal("IDENT".to_string())),
+        );
+        let different_terminal = Token::new(
+            Arc::<str>::from("abc def"),
+            0,
+            3,
+            2,
+            Arc::new(Symbol::Terminal("NUMBER".to_string())),
+        );
+
+        assert_eq!(lhs, same);
+        assert_ne!(lhs, different_line);
+        assert_ne!(lhs, different_terminal);
+    }
+
+    #[test]
     fn tokenizer_and_lexer_conf_tokenize_with_ignore() {
         let terminals = vec![
             Arc::new(TerminalDef::with_regex("_NL", r"\n+", RegexFlag::default(), 0)),
