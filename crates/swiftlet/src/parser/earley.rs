@@ -1,12 +1,12 @@
+use crate::ast::AST;
+use crate::error::ParserError;
 use crate::grammar::{Rule, RuleOption};
 use crate::lexer::{Symbol, Token, Tokenizer};
-use crate::ast::AST;
 use crate::parser::Parser;
-use crate::error::ParserError;
 use crate::parser::utils::dot_state;
 use crate::parser_frontends::ParserFrontend;
-use crate::{Ambiguity, ParserOption, non_terms};
-use std::collections::HashMap;
+use crate::{Ambiguity, LexerMode, ParserOption, non_terms};
+use std::collections::{BTreeSet, HashMap};
 use std::fmt::{Display, Formatter};
 use std::iter::Iterator;
 use std::sync::Arc;
@@ -31,7 +31,7 @@ struct StateCore {
 }
 
 /// Stores all Earley states generated for a single chart position.
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct ChartColumn {
     states: Vec<Arc<State>>,
     exact_index: HashMap<StateCore, Vec<Arc<State>>>,
@@ -242,16 +242,91 @@ impl EarleyParser {
             let _ = chart[i + 1].insert(next_state);
         }
     }
-}
 
-impl Parser for EarleyParser {
-    /// Returns parser frontend.
-    fn get_parser_frontend(&self) -> Arc<ParserFrontend> {
-        self.parser_frontend.clone()
+    fn finalize_basic_parse(&self, chart: &[ChartColumn], text: &str) -> Result<AST, ParserError> {
+        let mut complete_parsed_tree = chart
+            .last()
+            .unwrap()
+            .states
+            .iter()
+            .filter(|x| x.rule.origin.as_ref().as_str() == "gamma");
+
+        match self.parser_config.ambiguity {
+            Ambiguity::Resolve => {
+                if let Some(states) = complete_parsed_tree.next()
+                    && let Some(children) = states.children.first()
+                {
+                    return Ok(children.clone());
+                }
+            }
+            Ambiguity::Explicit => {
+                let mut children = Vec::new();
+                for states in complete_parsed_tree {
+                    children.push(states.children.first().cloned().unwrap());
+                }
+
+                if !children.is_empty() {
+                    return Ok(AST::Tree("_ambiguity".to_string(), children));
+                }
+            }
+        }
+        Err(ParserError::FailedToParse(text.to_string()))
     }
 
-    /// Runs Earley parsing and returns an AST according to ambiguity strategy.
-    fn parse(&self, mut token_iter: Tokenizer) -> Result<AST, ParserError> {
+    fn finalize_dynamic_parse(
+        &self,
+        chart: &[ChartColumn],
+        text: &str,
+    ) -> Result<AST, ParserError> {
+        let ignore = self
+            .parser_frontend
+            .get_parser()
+            .get_ignore_symbols()
+            .clone();
+        let final_positions = chart
+            .iter()
+            .enumerate()
+            .filter_map(|(index, _)| {
+                let normalized =
+                    self.parser_frontend
+                        .get_lexer()
+                        .skip_ignored(text, index, ignore.as_ref());
+                if normalized == text.len() {
+                    Some(index)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let mut complete_parsed_tree = final_positions
+            .into_iter()
+            .flat_map(|index| chart[index].states.iter())
+            .filter(|x| x.rule.origin.as_ref().as_str() == "gamma");
+
+        match self.parser_config.ambiguity {
+            Ambiguity::Resolve => {
+                if let Some(states) = complete_parsed_tree.next()
+                    && let Some(children) = states.children.first()
+                {
+                    return Ok(children.clone());
+                }
+            }
+            Ambiguity::Explicit => {
+                let mut children = Vec::new();
+                for states in complete_parsed_tree {
+                    children.push(states.children.first().cloned().unwrap());
+                }
+
+                if !children.is_empty() {
+                    return Ok(AST::Tree("_ambiguity".to_string(), children));
+                }
+            }
+        }
+        Err(ParserError::FailedToParse(text.to_string()))
+    }
+
+    fn parse_basic(&self, mut token_iter: Tokenizer) -> Result<AST, ParserError> {
         let mut chart = vec![ChartColumn::default()];
 
         let start_rule = Arc::new(Rule::new(
@@ -301,7 +376,15 @@ impl Parser for EarleyParser {
 
             #[cfg(feature = "debug")]
             if self.parser_config.debug {
-                println!("Index: {} | {}", i, if let Some(t) = token { t.to_string() } else {"None".to_string()});
+                println!(
+                    "Index: {} | {}",
+                    i,
+                    if let Some(t) = token {
+                        t.to_string()
+                    } else {
+                        "None".to_string()
+                    }
+                );
                 for state in chart[i].states.iter() {
                     println!("\tState: {}", state);
                 }
@@ -310,34 +393,93 @@ impl Parser for EarleyParser {
         }
 
         chart.remove(chart.len() - 1);
+        self.finalize_basic_parse(&chart, token_iter.get_text())
+    }
 
-        let mut complete_parsed_tree = chart
-            .last()
-            .unwrap()
-            .states
-            .iter()
-            .filter(|x| x.rule.origin.as_ref().as_str() == "gamma");
+    fn parse_dynamic(&self, token_iter: Tokenizer) -> Result<AST, ParserError> {
+        let text = token_iter.get_text().to_string();
+        let lexer = self.parser_frontend.get_lexer();
+        let ignore = self
+            .parser_frontend
+            .get_parser()
+            .get_ignore_symbols()
+            .clone();
+        let mut chart = vec![ChartColumn::default(); text.len() + 1];
+        let mut agenda = BTreeSet::from([0usize]);
 
-        match self.parser_config.ambiguity {
-            Ambiguity::Resolve => {
-                if let Some(states) = complete_parsed_tree.next()
-                    && let Some(children) = states.children.first()
-                {
-                    return Ok(children.clone());
+        let start_rule = Arc::new(Rule::new(
+            Arc::new(Symbol::NonTerminal("gamma".to_string())),
+            vec![non_terms!(self.parser_config.start)],
+            Arc::new(RuleOption::default()),
+            0,
+        ));
+        let _ = chart[0].insert(Arc::new(State::new(start_rule, 0, 0, 0, vec![])));
+
+        while let Some(i) = agenda.pop_first() {
+            let mut worklist = (0..chart[i].states.len()).collect::<Vec<_>>();
+            while let Some(state_index) = worklist.pop() {
+                let state = chart[i].states[state_index].clone();
+                if state.is_complete() {
+                    self.complete(&mut chart, &mut worklist, state, i);
+                    continue;
                 }
-            }
-            Ambiguity::Explicit => {
-                let mut children = Vec::new();
-                for states in complete_parsed_tree {
-                    children.push(states.children.first().cloned().unwrap());
-                }
 
-                return Ok(AST::Tree("_ambiguity".to_string(), children));
+                if let Some(next_symbol) = state.next_symbol() {
+                    if self
+                        .parser_frontend
+                        .get_parser()
+                        .contains_rule(&next_symbol)
+                    {
+                        self.prediction(&mut chart, &mut worklist, next_symbol, i);
+                    } else if let Some(token) =
+                        lexer.match_terminal(&text, i, &next_symbol, ignore.as_ref())
+                    {
+                        let next_index = token.get_end();
+                        let mut child = Vec::with_capacity(state.children.len() + 1);
+                        child.extend(state.children.iter().cloned());
+                        if !token.terminal.starts_with("_") || token.terminal.starts_with("__") {
+                            child.push(AST::Token(token));
+                        }
+
+                        let next_state = Arc::new(State {
+                            rule: state.rule.clone(),
+                            dot: state.dot + 1,
+                            start: state.start,
+                            end: next_index,
+                            children: child,
+                        });
+
+                        if chart[next_index].insert(next_state).is_some() {
+                            let _ = agenda.insert(next_index);
+                        }
+                    }
+                }
             }
         }
-        Err(ParserError::FailedToParse(
-            token_iter.get_text().to_string(),
-        ))
+
+        self.finalize_dynamic_parse(&chart, &text)
+    }
+
+    fn parse_scannerless(&self, token_iter: Tokenizer) -> Result<AST, ParserError> {
+        // Initial scannerless mode reuses the direct terminal-matching Earley path
+        // instead of the pre-tokenized stream.
+        self.parse_dynamic(token_iter)
+    }
+}
+
+impl Parser for EarleyParser {
+    /// Returns parser frontend.
+    fn get_parser_frontend(&self) -> Arc<ParserFrontend> {
+        self.parser_frontend.clone()
+    }
+
+    /// Runs Earley parsing and returns an AST according to ambiguity strategy.
+    fn parse(&self, token_iter: Tokenizer) -> Result<AST, ParserError> {
+        match self.parser_config.lexer_mode {
+            LexerMode::Basic => self.parse_basic(token_iter),
+            LexerMode::Dynamic => self.parse_dynamic(token_iter),
+            LexerMode::Scannerless => self.parse_scannerless(token_iter),
+        }
     }
 }
 
@@ -399,5 +541,46 @@ mod tests {
         let explicit = EarleyParser::new(explicit_pf.clone(), explicit_opt);
         let ast = explicit.parse(explicit_pf.tokenizer("x")).unwrap();
         assert_eq!(ast.get_tree_name(), Some(&"_ambiguity".to_string()));
+    }
+
+    #[test]
+    fn earley_dynamic_lexing_handles_contextual_terminals() {
+        let grammar = r#"
+        start: "select" NAME
+        NAME: /[a-z]+/
+        %import WS
+        %ignore WS
+        "#;
+
+        let basic_opt = Arc::new(ParserOption::default());
+        let basic_pf = test_frontend(grammar, basic_opt.clone());
+        let basic = EarleyParser::new(basic_pf.clone(), basic_opt);
+        assert!(basic.parse(basic_pf.tokenizer("select users")).is_err());
+
+        let dynamic_opt = Arc::new(ParserOption {
+            lexer_mode: LexerMode::Dynamic,
+            ..ParserOption::default()
+        });
+        let dynamic_pf = test_frontend(grammar, dynamic_opt.clone());
+        let dynamic = EarleyParser::new(dynamic_pf.clone(), dynamic_opt);
+        assert!(dynamic.parse(dynamic_pf.tokenizer("select users")).is_ok());
+    }
+
+    #[test]
+    fn earley_scannerless_mode_handles_contextual_terminals() {
+        let grammar = r#"
+        start: "select" NAME
+        NAME: /[a-z]+/
+        %import WS
+        %ignore WS
+        "#;
+
+        let scannerless_opt = Arc::new(ParserOption {
+            lexer_mode: LexerMode::Scannerless,
+            ..ParserOption::default()
+        });
+        let scannerless_pf = test_frontend(grammar, scannerless_opt.clone());
+        let scannerless = EarleyParser::new(scannerless_pf.clone(), scannerless_opt);
+        assert!(scannerless.parse(scannerless_pf.tokenizer("select users")).is_ok());
     }
 }

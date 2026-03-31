@@ -80,12 +80,24 @@ pub enum Ambiguity {
     Explicit,
 }
 
+/// Controls how the parser obtains terminals from input text.
+#[derive(Clone, Debug)]
+pub enum LexerMode {
+    /// Use the current global tokenizer before parsing.
+    Basic,
+    /// Let the Earley parser request only the terminals expected at each position.
+    Dynamic,
+    /// Parse terminals directly inside Earley without relying on the pre-tokenized stream.
+    Scannerless,
+}
+
 /// Configures parser construction and runtime behavior.
 #[derive(Debug, Clone)]
 pub struct ParserOption {
     pub start: String,
     pub algorithm: Algorithm,
     pub ambiguity: Ambiguity,
+    pub lexer_mode: LexerMode,
     pub debug: bool,
 }
 
@@ -96,6 +108,7 @@ impl Default for ParserOption {
             start: "start".to_string(),
             algorithm: Algorithm::Earley,
             ambiguity: Ambiguity::Resolve,
+            lexer_mode: LexerMode::Basic,
             debug: false,
         }
     }
