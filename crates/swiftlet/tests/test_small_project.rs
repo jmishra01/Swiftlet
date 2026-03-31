@@ -1,7 +1,6 @@
+use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
 use swiftlet::{ParserOption, Swiftlet};
-use std::sync::Arc;
-
 
 #[macro_use]
 mod common;
@@ -108,7 +107,8 @@ multi_test!(
     "1 + 2",
     "start",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     rule_clr_add_multi_numbers,
@@ -123,7 +123,8 @@ multi_test!(
     "1 + 2 + 3 + 4 + 5",
     "start",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     rule_clr_bodmas,
@@ -143,4 +144,5 @@ multi_test!(
     "3 * (2 * (3 + 4) - 5)",
     "start",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);

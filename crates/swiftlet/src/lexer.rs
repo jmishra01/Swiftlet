@@ -1,3 +1,4 @@
+use crate::error::ParserError;
 use fancy_regex::{Regex, RegexBuilder};
 use std::collections::HashSet;
 use std::fmt::{Debug, Display, Formatter};
@@ -299,15 +300,20 @@ impl Tokenizer {
     pub(crate) fn get_text(&self) -> &str {
         &self.text
     }
-}
 
-impl Iterator for Tokenizer {
-    type Item = Arc<Token>;
+    fn line_column(&self, location: usize) -> (usize, usize) {
+        let prefix = &self.text[..location];
+        let line = prefix.chars().filter(|ch| *ch == '\n').count() + 1;
+        let column = prefix
+            .rsplit('\n')
+            .next()
+            .map(|segment| segment.chars().count() + 1)
+            .unwrap_or(1);
+        (line, column)
+    }
 
-    /// Produces the next token matched at the current cursor.
-    ///
-    /// Panics when no terminal matches the current input position.
-    fn next(&mut self) -> Option<Self::Item> {
+    /// Produces the next token or a structured tokenization error.
+    pub fn next_token(&mut self) -> Result<Option<Arc<Token>>, ParserError> {
         if self.start < self.len {
             let slice_text = &self.text[self.start..];
 
@@ -328,15 +334,15 @@ impl Iterator for Tokenizer {
                             self.line += 1;
                             if self.start == 0 {
                                 self.start += mt_end;
-                                return self.next();
+                                return self.next_token();
                             }
                         }
                         self.start += mt_len;
 
-                        Some(token)
+                        Ok(Some(token))
                     } else {
                         self.start += mt_end;
-                        self.next()
+                        self.next_token()
                     };
                 }
             }
@@ -349,19 +355,31 @@ impl Iterator for Tokenizer {
                         Pattern::PatternRegex(_) => x.get_name().as_ref().as_str().to_string(),
                         Pattern::PatternStr(name) => name,
                     })
-                    .collect::<Vec<String>>()
-                    .join(", ");
+                    .collect::<Vec<String>>();
+                let (line, column) = self.line_column(previous_start);
 
-                panic!(
-                    "Failed during tokenization at location {} of input text, expecting one of the following terminals: ({}).\n{}\n{}^",
-                    previous_start,
-                    expected_next_token,
-                    self.text,
-                    " ".repeat(previous_start)
-                );
+                return Err(ParserError::TokenizationError {
+                    location: previous_start,
+                    line,
+                    column,
+                    expected: expected_next_token,
+                    text: self.text.to_string(),
+                    caret: format!("{}^", " ".repeat(previous_start)),
+                });
             }
         }
-        None
+        Ok(None)
+    }
+}
+
+impl Iterator for Tokenizer {
+    type Item = Arc<Token>;
+
+    /// Produces the next token matched at the current cursor.
+    ///
+    /// Panics when no terminal matches the current input position.
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_token().unwrap()
     }
 }
 

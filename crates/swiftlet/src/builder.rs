@@ -31,10 +31,13 @@ impl GrammarBuilder {
     }
 
     /// Tokenizes input text and materializes the resulting token stream.
-    pub fn tokens(&self, text: &str) -> Vec<crate::lexer::Token> {
-        self.get_tokens(text)
-            .map(|token| token.as_ref().clone())
-            .collect()
+    pub fn tokens(&self, text: &str) -> Result<Vec<crate::lexer::Token>, ParserError> {
+        let mut tokenizer = self.get_tokens(text);
+        let mut tokens = Vec::new();
+        while let Some(token) = tokenizer.next_token()? {
+            tokens.push(token.as_ref().clone());
+        }
+        Ok(tokens)
     }
 
     /// Parses input text into an AST by tokenizing then invoking the selected parser.
@@ -77,7 +80,7 @@ mod tests {
 
         let mut tokenizer = builder.get_tokens("123");
         assert_eq!(tokenizer.next().unwrap().word(), "123");
-        assert_eq!(builder.tokens("123")[0].word(), "123");
+        assert_eq!(builder.tokens("123").unwrap()[0].word(), "123");
         assert!(builder.parse("123").is_ok());
     }
 
@@ -91,5 +94,15 @@ mod tests {
         let builder = GrammarBuilder::new(parser_frontend, parser_opt);
 
         assert!(builder.parse("42").is_ok());
+    }
+
+    #[test]
+    fn builder_parse_returns_tokenization_error() {
+        let parser_opt = Arc::new(ParserOption::default());
+        let parser_frontend = test_frontend(grammar_text(), parser_opt.clone());
+        let builder = GrammarBuilder::new(parser_frontend, parser_opt);
+
+        let err = builder.parse("abc").expect_err("tokenization should fail");
+        assert!(matches!(err, ParserError::TokenizationError { .. }));
     }
 }

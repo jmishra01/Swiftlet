@@ -181,10 +181,10 @@ class SwiftletBindingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid lexer_mode"):
             Swiftlet(SIMPLE_GRAMMAR, lexer_mode="unknown")
 
-    def test_parse_failure_raises_runtime_error_for_tokenization_panic(self) -> None:
+    def test_parse_failure_raises_value_error_for_tokenization_error(self) -> None:
         parser = Swiftlet(SIMPLE_GRAMMAR)
 
-        with self.assertRaisesRegex(RuntimeError, "Failed during tokenization"):
+        with self.assertRaisesRegex(ValueError, "Tokenization failed"):
             parser.parse("abc")
 
     def test_dynamic_lexer_mode_handles_contextual_terminals(self) -> None:

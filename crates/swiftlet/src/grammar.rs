@@ -49,7 +49,7 @@ pub struct Rule {
     pub(crate) origin: Arc<Symbol>,
     pub(crate) expansion: Vec<Arc<Symbol>>,
     pub(crate) rule_option: Arc<RuleOption>,
-    pub(crate) order: usize
+    pub(crate) order: usize,
 }
 
 impl Rule {

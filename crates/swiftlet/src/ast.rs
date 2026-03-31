@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use crate::lexer::Token;
+use std::sync::Arc;
 
 /// Represents either a token leaf or a named tree node in the parse result.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -56,7 +56,7 @@ impl AST {
 
     pub fn get_children(&self) -> Option<&Vec<AST>> {
         if let AST::Tree(_, children) = self {
-            return Some(children)
+            return Some(children);
         }
         None
     }
@@ -243,10 +243,14 @@ mod tests {
         let first_expr = tree.get_tree("expr");
         assert!(matches!(first_expr, Some(AST::Tree(name, _)) if name == "expr"));
 
-        let expr_nodes = tree.get_child_tree("expr").expect("expr nodes should exist");
+        let expr_nodes = tree
+            .get_child_tree("expr")
+            .expect("expr nodes should exist");
         assert_eq!(expr_nodes.len(), 2);
 
-        let leaf_nodes = tree.get_child_tree("leaf").expect("leaf nodes should exist");
+        let leaf_nodes = tree
+            .get_child_tree("leaf")
+            .expect("leaf nodes should exist");
         assert_eq!(leaf_nodes.len(), 1);
 
         assert!(matches!(tree.get_tree("missing"), None));

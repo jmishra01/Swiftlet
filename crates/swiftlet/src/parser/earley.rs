@@ -347,7 +347,7 @@ impl EarleyParser {
         }
 
         while i <= j {
-            let token = token_iter.next();
+            let token = token_iter.next_token()?;
 
             if token.is_some() {
                 j += 1;
@@ -581,6 +581,10 @@ mod tests {
         });
         let scannerless_pf = test_frontend(grammar, scannerless_opt.clone());
         let scannerless = EarleyParser::new(scannerless_pf.clone(), scannerless_opt);
-        assert!(scannerless.parse(scannerless_pf.tokenizer("select users")).is_ok());
+        assert!(
+            scannerless
+                .parse(scannerless_pf.tokenizer("select users"))
+                .is_ok()
+        );
     }
 }

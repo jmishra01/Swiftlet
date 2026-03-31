@@ -7,7 +7,9 @@ use thiserror::Error;
 /// Enumerates parser construction and runtime failures.
 #[derive(Debug, Error)]
 pub enum ParserError {
-    #[error("Conflict: Ambiguous Grammar Detected ({conflict}) | {message} | {lr_table:?}\nRun with debug: true, for more details.")]
+    #[error(
+        "Conflict: Ambiguous Grammar Detected ({conflict}) | {message} | {lr_table:?}\nRun with debug: true, for more details."
+    )]
     Conflict {
         lr_table: IndexSet<ActionTable>,
         conflict: String,
@@ -17,6 +19,19 @@ pub enum ParserError {
     TransitionError(Arc<Symbol>),
     #[error("Failed to parser input text: \"{0}\"")]
     FailedToParse(String),
+    #[error("Failed to parse grammar: {0}")]
+    GrammarParseError(String),
+    #[error(
+        "Tokenization failed at byte {location} (line {line}, column {column}). Expected one of: {expected:?}\n{text}\n{caret}"
+    )]
+    TokenizationError {
+        location: usize,
+        line: usize,
+        column: usize,
+        expected: Vec<String>,
+        text: String,
+        caret: String,
+    },
     #[error("Didn't find any rule for word: \"{0}\" in the given grammar.")]
     RuleNotFound(String),
     #[error("Rule '{0}' is used, but production rules are not defined.")]
