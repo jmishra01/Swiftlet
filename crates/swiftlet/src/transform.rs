@@ -1,11 +1,11 @@
+use crate::ast::AST;
+use crate::error::ParserError;
 use crate::grammar::{Rule, RuleOption};
 use crate::lexer::{RegexFlag, Symbol, TerminalDef, get_symbol};
-use crate::ast::AST;
-use crate::{terminal_def};
+use crate::terminal_def;
 use fancy_regex::Regex;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
-use crate::error::ParserError;
 
 static ESCAPE: LazyLock<Regex> = LazyLock::new(|| {
     let re = Regex::new(r"(\p{P})").unwrap();
@@ -15,24 +15,21 @@ static ESCAPE: LazyLock<Regex> = LazyLock::new(|| {
 pub type OptVecStr = Option<Vec<String>>;
 pub type OptStr = Option<String>;
 
-
 pub(crate) fn fetch_terminals(ast: &AST) -> Vec<String> {
     match ast {
-        AST::Tree(_, childs) => {
-            childs
-                .iter()
-                .map(fetch_terminals)
-                .flatten()
-                .collect::<Vec<_>>()
-        },
+        AST::Tree(_, childs) => childs
+            .iter()
+            .map(fetch_terminals)
+            .flatten()
+            .collect::<Vec<_>>(),
         AST::Token(token) => {
             let word = token.word();
             vec![if word.starts_with("\"") & word.ends_with("\"") {
-                    word[1..word.len() - 1].to_string()
-                } else {
-                    word.to_string()
-                }]
-        },
+                word[1..word.len() - 1].to_string()
+            } else {
+                word.to_string()
+            }]
+        }
     }
 }
 
@@ -40,21 +37,22 @@ pub struct TerminalCompiler<'a> {
     terminals: Vec<&'a AST>,
     map: HashMap<String, Arc<TerminalDef>>,
     index: usize,
-    terminal_len: usize
+    terminal_len: usize,
 }
 
 impl<'a> TerminalCompiler<'a> {
     pub fn new(terminals: Vec<&'a AST>) -> Self {
         let terminal_len = terminals.len();
-        Self { terminals, map: HashMap::new(), index: 0,  terminal_len}
+        Self {
+            terminals,
+            map: HashMap::new(),
+            index: 0,
+            terminal_len,
+        }
     }
 
     pub fn get_terminals(&self) -> Vec<Arc<TerminalDef>> {
-        self
-            .map
-            .values()
-            .map(|t| t.clone())
-            .collect::<Vec<_>>()
+        self.map.values().map(|t| t.clone()).collect::<Vec<_>>()
     }
 
     pub fn compile(&mut self) {
@@ -69,12 +67,12 @@ impl<'a> TerminalCompiler<'a> {
         let first = child.first().unwrap();
         if let Some(w) = self._transform(first) {
             if w.ends_with("\"i") {
-                let word = &w.as_str()[1..w.len()-2];
-                let word  = ESCAPE.replace_all(word, r"\$1");
+                let word = &w.as_str()[1..w.len() - 2];
+                let word = ESCAPE.replace_all(word, r"\$1");
                 return Some(format!("(?i:{})", word));
             }
-            let word = &w.as_str()[1..w.len()-1];
-            let word  = ESCAPE.replace_all(word, r"\$1");
+            let word = &w.as_str()[1..w.len() - 1];
+            let word = ESCAPE.replace_all(word, r"\$1");
             return Some(word.to_string());
         }
         None
@@ -109,7 +107,6 @@ impl<'a> TerminalCompiler<'a> {
         Some(pattern)
     }
 
-
     fn _maybe(&mut self, child: &[AST]) -> OptStr {
         let first = child.first().unwrap();
         let maybe = self._transform(first)?;
@@ -122,27 +119,25 @@ impl<'a> TerminalCompiler<'a> {
         let sign = self._transform(second)?;
 
         match first {
-            AST::Tree(name, _) => {
-                match name.as_str() {
-                    "terminal" => {
-                        let terminal = self._transform(first)?;
-                        let is_contains = self.map.contains_key(&terminal);
-                        if !is_contains {
-                            for index in (self.index + 1)..self.terminal_len {
-                                let terminal = self.terminals[index];
-                                self._transform(terminal);
-                            }
+            AST::Tree(name, _) => match name.as_str() {
+                "terminal" => {
+                    let terminal = self._transform(first)?;
+                    let is_contains = self.map.contains_key(&terminal);
+                    if !is_contains {
+                        for index in (self.index + 1)..self.terminal_len {
+                            let terminal = self.terminals[index];
+                            self._transform(terminal);
                         }
-                        let value = self.map.get(&terminal).unwrap();
-                        Some(format!("({}){}", value.value, sign))
-                    },
-                    _ => {
-                        let value = self._transform(first)?;
-                        Some(format!("{}{}", value, sign))
-                    },
+                    }
+                    let value = self.map.get(&terminal).unwrap();
+                    Some(format!("({}){}", value.value, sign))
                 }
-            }
-            _ => unreachable!()
+                _ => {
+                    let value = self._transform(first)?;
+                    Some(format!("{}{}", value, sign))
+                }
+            },
+            _ => unreachable!(),
         }
     }
 
@@ -157,48 +152,45 @@ impl<'a> TerminalCompiler<'a> {
     fn _expansion(&mut self, child: &[AST]) -> OptStr {
         match self._resolve_internal_terminal(child) {
             Some(arr) => Some(arr.join("")),
-            None => None
+            None => None,
         }
     }
 
     fn _resolve_internal_terminal(&mut self, child: &[AST]) -> OptVecStr {
-
         Some(
             child
-            .iter()
-            .filter_map(|c| {
-                match c {
+                .iter()
+                .filter_map(|c| match c {
                     AST::Token(_) => None,
-                    AST::Tree(name, childs) => {
-                        match name.as_str() {
-                            "terminal" => {
-                                let child_terminal_name = self._terminal(childs).unwrap();
-                                if !self.map.contains_key(&child_terminal_name) {
-                                    for _index in (self.index + 1)..self.terminal_len {
-                                        let term = self.terminals[_index];
-                                        match term {
-                                            AST::Tree(_, term_children) => {
-                                                let &_first = term.get_child_tree("terminal")?.first()?;
-                                                let token_word = self._transform(_first)?;
-                                                if token_word.cmp(&child_terminal_name).is_eq() {
-                                                    self._term(term_children);
-                                                }
-                                            },
-                                            _ => unreachable!()
+                    AST::Tree(name, childs) => match name.as_str() {
+                        "terminal" => {
+                            let child_terminal_name = self._terminal(childs).unwrap();
+                            if !self.map.contains_key(&child_terminal_name) {
+                                for _index in (self.index + 1)..self.terminal_len {
+                                    let term = self.terminals[_index];
+                                    match term {
+                                        AST::Tree(_, term_children) => {
+                                            let &_first = term
+                                                .get_child_tree("terminal")?
+                                                .first()?;
+                                            let token_word = self._transform(_first)?;
+                                            if token_word.cmp(&child_terminal_name).is_eq() {
+                                                self._term(term_children);
+                                            }
                                         }
+                                        _ => unreachable!(),
                                     }
                                 }
-                                match self.map.get(&child_terminal_name) {
-                                    Some(term) => Some(term.value.clone()),
-                                    None => None
-                                }
-                            },
-                            _ => self._transform(c)
+                            }
+                            match self.map.get(&child_terminal_name) {
+                                Some(term) => Some(term.value.clone()),
+                                None => None,
+                            }
                         }
-                    }
-                }
-            })
-            .collect::<Vec<_>>()
+                        _ => self._transform(c),
+                    },
+                })
+                .collect::<Vec<_>>(),
         )
     }
 
@@ -206,13 +198,18 @@ impl<'a> TerminalCompiler<'a> {
         let first_child = child.first().unwrap();
         let name_term = self._transform(first_child)?;
         if self.map.contains_key(&name_term) {
-            return None
+            return None;
         }
 
+        let priority = if child.len() > 2 {
+            self._transform(&child[1])?.parse::<usize>().unwrap()
+        } else {
+            5
+        };
         let second_child = child.last().unwrap();
         let value = self._transform(second_child)?;
-        let terminal_def = TerminalDef::with_regex(&name_term,
-                                                   &value, RegexFlag::default(), 5);
+        let terminal_def =
+            TerminalDef::with_regex(&name_term, &value, RegexFlag::default(), priority);
         self.map.insert(name_term, Arc::new(terminal_def));
         None
     }
@@ -224,32 +221,35 @@ impl<'a> TerminalCompiler<'a> {
     fn _range(&mut self, child: &[AST]) -> OptStr {
         let first = child.first().unwrap();
         let first_range = self._transform(first)?;
-        let first_range = first_range[1..first_range.len()-1].to_owned();
+        let first_range = first_range[1..first_range.len() - 1].to_owned();
 
         let second = child.last().unwrap();
         let second_range = self._transform(second)?;
-        let second_range = second_range[1..second_range.len()-1].to_owned();
+        let second_range = second_range[1..second_range.len() - 1].to_owned();
 
         Some(format!("[{}-{}]", first_range, second_range))
+    }
+
+    fn _priority(&mut self, child: &[AST]) -> OptStr {
+        self._transform(child.last().unwrap())
     }
 
     fn _transform(&mut self, ast: &AST) -> OptStr {
         match ast {
             AST::Token(token) => Some(token.word().to_string()),
-            AST::Tree(name, children) => {
-                match name.as_str() {
-                    "term" => self._term(children),
-                    "string" => self._string(children),
-                    "expansion" => self._expansion(children),
-                    "or_expansion" => self._or_expansion(children),
-                    "op_expansion" => self._op_expansion(children),
-                    "terminal" => self._terminal(children),
-                    "regex" => self._regex(children),
-                    "maybe" => self._maybe(children),
-                    "range" => self._range(children),
-                    _ => panic!("{} tree not found.", name)
-                }
-            }
+            AST::Tree(name, children) => match name.as_str() {
+                "term" => self._term(children),
+                "string" => self._string(children),
+                "expansion" => self._expansion(children),
+                "or_expansion" => self._or_expansion(children),
+                "op_expansion" => self._op_expansion(children),
+                "terminal" => self._terminal(children),
+                "regex" => self._regex(children),
+                "maybe" => self._maybe(children),
+                "range" => self._range(children),
+                "priority" => self._priority(children),
+                _ => panic!("{} tree not found.", name),
+            },
         }
     }
 }
@@ -292,7 +292,7 @@ impl RuleCompiler {
             for r in v.iter() {
                 for e in r.expansion.iter() {
                     if !e.is_terminal() && !self.rules.contains_key(e) {
-                        return Err(ParserError::RuleProductionNotFound(e.as_str().to_string()))
+                        return Err(ParserError::RuleProductionNotFound(e.as_str().to_string()));
                     }
                 }
             }
@@ -448,13 +448,13 @@ impl RuleCompiler {
 
         if let Some(alias_trees) = child.get_child_tree("alias") {
             for alias_tree in alias_trees {
-                if let Some(AST::Tree(_, alias_childs)) = alias_tree.get_last_child() &&
-                    let Some(AST::Token(alias_child)) = alias_childs.last() {
+                if let Some(AST::Tree(_, alias_childs)) = alias_tree.get_last_child()
+                    && let Some(AST::Token(alias_child)) = alias_childs.last()
+                {
                     alias_rules.push(alias_child.word().to_string());
                 }
             }
         }
-
 
         let prod = self._transform(child).unwrap();
         let priority = if tree.len() > 2 {
@@ -601,8 +601,12 @@ impl RuleCompiler {
 
         let terminal_name = format!("__PATTERN__{}__1", pattern.to_uppercase());
 
-        self.terminal
-            .push(terminal_def!(terminal_name.as_str(), pattern, regex_flag, 0));
+        self.terminal.push(terminal_def!(
+            terminal_name.as_str(),
+            pattern,
+            regex_flag,
+            0
+        ));
 
         Some(vec![terminal_name])
     }
@@ -639,5 +643,3 @@ impl RuleCompiler {
         }
     }
 }
-
-

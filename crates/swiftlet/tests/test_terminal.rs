@@ -1,11 +1,10 @@
-use swiftlet::grammar::Algorithm;
-use swiftlet::{Ambiguity, ParserOption, Swiftlet};
 use std::fs;
 use std::sync::Arc;
+use swiftlet::grammar::Algorithm;
+use swiftlet::{Ambiguity, ParserOption, Swiftlet};
 
 #[macro_use]
 mod common;
-
 
 multi_test!(
     terminal_clr_inline_terminal_concatenate,
@@ -17,7 +16,8 @@ multi_test!(
     "ab",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_flag_i_text_ab,
@@ -29,7 +29,8 @@ multi_test!(
     "ab",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_flag_i_text_aB,
@@ -41,7 +42,8 @@ multi_test!(
     "aB",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_terminal_reference,
@@ -54,7 +56,8 @@ multi_test!(
     "ab",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_terminal_multi_reference,
@@ -68,7 +71,8 @@ multi_test!(
     "xab",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_range,
@@ -82,7 +86,8 @@ multi_test!(
     "x12345",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_or_xb,
@@ -96,7 +101,8 @@ multi_test!(
     "xb",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_or_ab,
@@ -110,7 +116,8 @@ multi_test!(
     "ab",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_or_op_xab,
@@ -124,7 +131,8 @@ multi_test!(
     "xab",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_or_op_xaxxab,
@@ -138,7 +146,8 @@ multi_test!(
     "xaxxab",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_regex_abb,
@@ -151,7 +160,8 @@ multi_test!(
     "abb",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_regex_abbccc,
@@ -164,7 +174,8 @@ multi_test!(
     "abbccc",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_regex_flags_i,
@@ -177,7 +188,24 @@ multi_test!(
     "abBcCc",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
+
+multi_test!(
+    terminal_clr_priority_keyword_over_identifier,
+    terminal_earley_priority_keyword_over_identifier,
+    r#"
+    s: SELECT NAME
+    SELECT.10: "select"
+    NAME: /[a-z]+/
+    %import WS
+    %ignore WS
+    "#,
+    "select users",
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_maybe_ab,
@@ -190,7 +218,8 @@ multi_test!(
     "ab",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     terminal_clr_maybe_ac,
@@ -203,7 +232,8 @@ multi_test!(
     "ac",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 #[test]
 fn parser_option_default_values() {

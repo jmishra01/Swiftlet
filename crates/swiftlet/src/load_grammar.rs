@@ -3,13 +3,13 @@ use std::sync::{Arc, LazyLock};
 
 use crate::builder::GrammarBuilder;
 use crate::common::get_common_terminals;
+use crate::error::ParserError;
 use crate::grammar::{Algorithm, Rule, create_rules};
 use crate::lexer::{LexerConf, RegexFlag, Symbol, TerminalDef};
 use crate::parser_frontends::ParserConf;
 use crate::parser_frontends::ParserFrontend;
-use crate::transform::{fetch_terminals, RuleCompiler, TerminalCompiler};
+use crate::transform::{RuleCompiler, TerminalCompiler, fetch_terminals};
 use crate::{ParserOption, terminal_def};
-use crate::error::ParserError;
 
 static RULES: LazyLock<HashMap<Arc<Symbol>, Vec<Arc<Rule>>>> = LazyLock::new(get_rules);
 
@@ -37,7 +37,12 @@ pub fn get_terminals() -> Vec<Arc<TerminalDef>> {
         terminal_def!("_DOT_DOT", r"..", 0),
         terminal_def!("RULE", r"(_|\?)?[a-z][_a-z0-9]*", RegexFlag::default(), 0),
         terminal_def!("TERMINAL", "_?[A-Z][_A-Z0-9]*", RegexFlag::default(), 0),
-        terminal_def!("STRING", r#""(\\"|\\|[^"\n])*?"i?"#, RegexFlag::default(), 0),
+        terminal_def!(
+            "STRING",
+            r#""(\\"|\\|[^"\n])*?"i?"#,
+            RegexFlag::default(),
+            0
+        ),
         terminal_def!("REGEXP", _regex.as_str(), RegexFlag::default(), 0),
         terminal_def!("_NL_OR", r"(\r?\n)+\s*\|", RegexFlag::default(), 0),
         terminal_def!("_NL", r"(\r?\n)+\s*", RegexFlag::default(), 0),
@@ -75,20 +80,24 @@ pub fn get_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
                 "non_terminal priority _COLON expansions _NL",
             ],
         ),
-        ("term", vec!["terminal _COLON expansions _NL"]),
-        ("priority", vec!["_DOT NUMBER"]),
-        ("?expansions", vec!["or_expansion"]),
         (
-            "or_expansion",
+            "term",
             vec![
-                "_or_expansion",
+                "terminal _COLON expansions _NL",
+                "terminal priority _COLON expansions _NL",
             ],
         ),
-        ("_or_expansion", vec![
-            "expansion",
-            "_or_expansion _OR expansion",
-            "_or_expansion _NL_OR expansion",
-        ]),
+        ("priority", vec!["_DOT NUMBER"]),
+        ("?expansions", vec!["or_expansion"]),
+        ("or_expansion", vec!["_or_expansion"]),
+        (
+            "_or_expansion",
+            vec![
+                "expansion",
+                "_or_expansion _OR expansion",
+                "_or_expansion _NL_OR expansion",
+            ],
+        ),
         ("?expansion", vec!["alias", "_expansion"]),
         ("alias", vec!["_expansion _TO non_terminal"]),
         ("_expansion", vec!["_expansion _expr", "_expr"]),
@@ -108,10 +117,14 @@ pub fn get_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
         ("range", vec!["STRING _DOT_DOT STRING"]),
         ("_term_str", vec!["terminal", "string"]),
         ("_terminal", vec!["_term_str", "_terminal _COMMA _term_str"]),
-        ("ignore", vec!["_IGNORE value _NL",
-                        "_IGNORE _LPAR _terminal _RPAR _NL"]),
-        ("import", vec!["_IMPORT terminal _NL",
-                        "_IMPORT _LPAR _terminal _RPAR _NL"]),
+        (
+            "ignore",
+            vec!["_IGNORE value _NL", "_IGNORE _LPAR _terminal _RPAR _NL"],
+        ),
+        (
+            "import",
+            vec!["_IMPORT terminal _NL", "_IMPORT _LPAR _terminal _RPAR _NL"],
+        ),
     ])
 }
 
@@ -319,6 +332,15 @@ mod tests {
         t: "hello"
         "#,
         r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "?e")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "t")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""hello"")])])])])"#
+    );
+
+    make_test_case!(
+        test_terminal_priority,
+        r#"
+        start: KEYWORD
+        KEYWORD.10: "select"
+        "#,
+        r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "start")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "KEYWORD")])])]), Tree("term", [Tree("terminal", [Token(TERMINAL, "KEYWORD")]), Tree("priority", [Token(NUMBER, "10")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""select"")])])])])"#
     );
 
     make_test_case!(

@@ -136,3 +136,6 @@ venv.bak/
 .idea
 # performance
 *.gz
+
+# Few md files
+TODO.md
