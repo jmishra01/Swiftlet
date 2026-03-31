@@ -31,6 +31,13 @@ expr: expr "+" INT -> add
 %ignore WS
 """
 
+CONTEXTUAL_GRAMMAR = """
+start: "select" NAME
+NAME: /[a-z]+/
+%import WS
+%ignore WS
+"""
+
 
 class EvalTransformer(Transformer):
     def start(self, children):
@@ -170,11 +177,31 @@ class SwiftletBindingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid ambiguity"):
             Swiftlet(SIMPLE_GRAMMAR, ambiguity="invalid")
 
+    def test_invalid_lexer_mode_raises_value_error(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid lexer_mode"):
+            Swiftlet(SIMPLE_GRAMMAR, lexer_mode="unknown")
+
     def test_parse_failure_raises_runtime_error_for_tokenization_panic(self) -> None:
         parser = Swiftlet(SIMPLE_GRAMMAR)
 
         with self.assertRaisesRegex(RuntimeError, "Failed during tokenization"):
             parser.parse("abc")
+
+    def test_dynamic_lexer_mode_handles_contextual_terminals(self) -> None:
+        basic = Swiftlet(CONTEXTUAL_GRAMMAR)
+        with self.assertRaises(ValueError):
+            basic.parse("select users")
+
+        dynamic = Swiftlet(CONTEXTUAL_GRAMMAR, lexer_mode="dynamic")
+        ast = dynamic.parse("select users")
+
+        self.assertEqual(ast.get_name(), "start")
+
+    def test_scannerless_lexer_mode_handles_contextual_terminals(self) -> None:
+        scannerless = Swiftlet(CONTEXTUAL_GRAMMAR, lexer_mode="scannerless")
+        ast = scannerless.parse("select users")
+
+        self.assertEqual(ast.get_name(), "start")
 
     def test_tokens_returns_python_token_wrappers(self) -> None:
         grammar = """
