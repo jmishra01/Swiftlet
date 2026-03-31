@@ -47,37 +47,49 @@ multi_test!(
     Algorithm::Earley
 );
 
-multi_test!(
-    rule_clr_sql_column_expr,
-    rule_earley_sql_column_expr,
+multi_test_multi_input_texts!(
+    rule_clr_sql_column_case_expr,
+    rule_earley_sql_column_case_expr,
     r#"
     start: column_expr
     column_expr: func
          | column
-         | string
          | case
          | literal
          | condition
-    func: FUNC_NAME "(" args ")"
-    args: column ("," column)*
-    case: "case"i ("when"i column_expr "then" column_expr)+ ("else" column_expr)? "end"
-    condition: column_expr comparator literal
+         | NULL
+    func: func_name "(" args ")"
+    args: column_expr ("," column_expr)*
+    case: "case"i when_stmt+ else_stmt? "end"i
+    when_stmt: "when"i column_expr "then"i column_expr
+    else_stmt: "else"i column_expr
+    condition: column_expr comparator column_expr
     comparator: "=" -> eq
         | "!=" -> ne
         | ">=" -> ge
         | "<=" -> le
         | "<" -> gt
         | ">" -> lt
-    string: "'" sentence "'"
-    sentence: NAME NAME*
     column: NAME
-    literal: INT | DECIMAL
-    FUNC_NAME: /[a-zA-Z][a-zA-Z_]+]/
+    func_name: NAME
+    literal: INT | DECIMAL | STRING
+    STRING: /'[a-zA-Z0-9%_ ]+'/
     NAME: /[a-zA-Z][a-zA-Z1-9_]+/
     %import (WS, INT, DECIMAL)
     %ignore WS
     "#,
-    "case Sales > 10 then 'Greater than 10' else 'Less than 10' end",
+    [
+        "SUM(Sales)",
+        "IF_NULL(Sales, 1)",
+        "IF_ZERO(Sales, NULL)",
+        "SUM(Sales > 5)",
+        "SUM(CASE WHEN Sales > 5 THEN 1 ELSE 2 END)",
+        "SUM(Sales) > 20",
+        "SUM(Cost_Price) > SUM(Selling_Price)",
+        "CASE WHEN Sales > 10 THEN 'Greater than 10' ELSE 'Less than 10' END",
+        "CASE WHEN Sales > 10 THEN 'Greater than 10' END",
+        "CASE WHEN SUM(Sales) > 10 THEN 'Aggregate value is greater than 10' ELSE 'Aggregate value is less than or equals to 10' END",
+    ],
     "start",
     Algorithm::CLR,
     Algorithm::Earley

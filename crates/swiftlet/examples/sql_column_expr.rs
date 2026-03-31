@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use swiftlet::preclude::*;
 
 const GRAMMAR: &str = r#"
@@ -13,7 +14,7 @@ const GRAMMAR: &str = r#"
     case: "case"i when_stmt+ else_stmt? "end"i
     when_stmt: "when"i column_expr "then"i column_expr
     else_stmt: "else"i column_expr
-    condition: column_expr comparator literal
+    condition: column_expr comparator column_expr
     comparator: "=" -> eq
         | "!=" -> ne
         | ">=" -> ge
@@ -33,31 +34,34 @@ fn main() {
     let parser_opt = Arc::new(
         ParserOption {
             algorithm: Algorithm::CLR,
+            debug: true,
             ..Default::default()
         }
     );
     match Swiftlet::from_string(GRAMMAR, parser_opt) {
         Ok(parser) => {
             let texts = [
-                "sum(Sales)",
+                "SUM(Sales)",
                 "IF_NULL(Sales, 1)",
                 "IF_ZERO(Sales, NULL)",
-                "sum(Sales > 5)",
-                "sum(case when Sales > 5 then 1 else 2 end)",
-                "sum(Sales) > 20",
-                "case when Sales > 10 then 'Greater than 10' else 'Less than 10' end",
-                "case when Sales > 10 then 'Greater than 10' end",
-                "case when sum(Sales) > 10 then 'Aggregate value is greater than 10' else 'Aggregate value is less than or equals to 10' end",
+                "SUM(Sales > 5)",
+                "SUM(CASE WHEN Sales > 5 THEN 1 ELSE 2 END)",
+                "SUM(Sales) > 20",
+                "SUM(Cost_Price) > SUM(Selling_Price)",
+                "CASE WHEN Sales > 10 THEN 'Greater than 10' ELSE 'Less than 10' END",
+                "CASE WHEN Sales > 10 THEN 'Greater than 10' END",
+                "CASE WHEN SUM(Sales) > 10 THEN 'Aggregate value is greater than 10' ELSE 'Aggregate value is less than or equals to 10' END",
             ];
-            for text in texts {
-                println!("{}", "-".repeat(text.len() + 6));
-                println!("Text: {}", text);
-                println!("{}", "-".repeat(text.len() + 6));
+            let prefix_text = "Column expr: ";
+            texts.into_iter().for_each(|text| {
+                println!("{}", "-".repeat(text.len() + prefix_text.len()));
+                println!("{}{}", prefix_text, text);
+                println!("{}", "-".repeat(text.len() + prefix_text.len()));
                 let parsed = parser.parse(text);
                 println!("AST =>");
                 parsed.unwrap().pretty_print();
                 println!("\n");
-            }
+            });
         },
         Err(err) => {
             eprintln!("{}", err);
