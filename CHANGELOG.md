@@ -2,9 +2,9 @@
 
 This changelog is derived from git tags and the commits since the latest tag.
 
-## Unreleased
+### v0.1.5 - 2026-03-31
 
-Changes since `v0.1.4` (`2026-03-29`):
+Changes in `v0.1.4..v0.1.5`:
 
 ### Added
 

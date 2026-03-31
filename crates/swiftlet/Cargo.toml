@@ -1,6 +1,6 @@
 [package]
 name = "swiftlet"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 description = "swiftlet is a high-performance text-parsing library for Rust, inspired by Python’s Lark."
 license = "MIT"
@@ -16,7 +16,7 @@ indexmap = {workspace = true}
 thiserror = {workspace = true}
 
 [features]
-default = ["debug"]
+default = []
 debug = []
 
 [profile.dev]
