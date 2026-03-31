@@ -1,9 +1,9 @@
 use crate::error::ParserError;
 use crate::{
     ParserOption,
+    ast::AST,
     grammar::{Rule, RuleOption},
     lexer::{Symbol, Token, Tokenizer},
-    ast::AST,
     non_terms,
     parser::Parser,
     parser::utils::dot_state,
@@ -310,11 +310,12 @@ impl Clr {
                         _ => unreachable!(),
                     };
                     let rule = self.rules.get(*n).unwrap();
-                    format!("Two rules reduce to same terminal: \"{}\"", rule.expansion.first().unwrap().get_value())
-                },
-                _ => {
-                    "".to_string()
+                    format!(
+                        "Two rules reduce to same terminal: \"{}\"",
+                        rule.expansion.first().unwrap().get_value()
+                    )
                 }
+                _ => "".to_string(),
             };
 
             Err(ParserError::Conflict {
@@ -334,19 +335,19 @@ impl Clr {
         stack_symbols: &mut Vec<AST>,
         lookahead: &Arc<Token>,
         tokenizer: &mut Tokenizer,
-    ) -> Arc<Token> {
+    ) -> Result<Arc<Token>, ParserError> {
         stack_states.push(pos);
         stack_symbols.push(AST::Token(lookahead.clone()));
-        if let Some(token) = tokenizer.next() {
-            token
+        if let Some(token) = tokenizer.next_token()? {
+            Ok(token)
         } else {
-            Arc::new(Token::new(
+            Ok(Arc::new(Token::new(
                 Arc::<str>::from(get_last_symbol().as_ref().as_str()),
                 0,
                 get_last_symbol().as_ref().as_str().len(),
                 0,
                 get_last_symbol(),
-            ))
+            )))
         }
     }
 
@@ -413,7 +414,9 @@ impl Parser for Clr {
     fn parse(&self, mut tokenizer: Tokenizer) -> Result<AST, ParserError> {
         let mut stack_states = vec![0usize];
         let mut stack_symbols = Vec::new();
-        let mut lookahead = tokenizer.next().unwrap();
+        let Some(mut lookahead) = tokenizer.next_token()? else {
+            return Err(ParserError::FailedToParse(tokenizer.get_text().to_string()));
+        };
 
         loop {
             let state = *stack_states.last().unwrap();
@@ -429,7 +432,7 @@ impl Parser for Clr {
                                 &mut stack_symbols,
                                 &lookahead,
                                 &mut tokenizer,
-                            );
+                            )?;
                         }
                         ActionTable::Reduce(pos) => {
                             self.reduce_action(*pos, &mut stack_states, &mut stack_symbols)?;

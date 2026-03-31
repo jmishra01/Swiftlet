@@ -79,10 +79,11 @@ fn build_parser_from_grammar(
     debug: bool,
 ) -> PyResult<RustSwiftlet> {
     let parser_option = build_parser_option(start, algorithm, ambiguity, lexer_mode, debug)?;
-    catch_unwind(AssertUnwindSafe(|| {
-        RustSwiftlet::from_string(grammar, parser_option).unwrap()
+    let parser = catch_unwind(AssertUnwindSafe(|| {
+        RustSwiftlet::from_string(grammar, parser_option)
     }))
-    .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))
+    .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?;
+    parser.map_err(|err| PyValueError::new_err(err.to_string()))
 }
 
 /// Builds a Rust parser from a grammar file and maps panics to Python errors.
@@ -95,10 +96,11 @@ fn build_parser_from_file(
     debug: bool,
 ) -> PyResult<RustSwiftlet> {
     let parser_option = build_parser_option(start, algorithm, ambiguity, lexer_mode, debug)?;
-    catch_unwind(AssertUnwindSafe(|| {
-        RustSwiftlet::from_file(file.to_string(), parser_option).unwrap()
+    let parser = catch_unwind(AssertUnwindSafe(|| {
+        RustSwiftlet::from_file(file.to_string(), parser_option)
     }))
-    .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))
+    .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?;
+    parser.map_err(|err| PyValueError::new_err(err.to_string()))
 }
 
 /// Token
@@ -379,7 +381,8 @@ impl Swiftlet {
             .map_err(|_| PyRuntimeError::new_err("failed to acquire parser lock"))?;
 
         let tokens = catch_unwind(AssertUnwindSafe(|| parser.tokens(text)))
-            .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?;
+            .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
 
         Ok(tokens
             .into_iter()

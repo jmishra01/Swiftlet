@@ -219,7 +219,7 @@ fn terminal_public_token_stream_uses_priorities() {
     let parser_opt = Arc::new(ParserOption::default());
     let parser = Swiftlet::from_string(grammar, parser_opt).expect("failed to build parser");
 
-    let tokens = parser.tokens("select users");
+    let tokens = parser.tokens("select users").expect("failed to tokenize");
     let terminals = tokens
         .iter()
         .map(|token| token.get_terminal())
@@ -242,7 +242,9 @@ fn terminal_public_print_tokens_debug_view_does_not_panic() {
     let parser_opt = Arc::new(ParserOption::default());
     let parser = Swiftlet::from_string(grammar, parser_opt).expect("failed to build parser");
 
-    parser.print_tokens("select users");
+    parser
+        .print_tokens("select users")
+        .expect("failed to print tokens");
 }
 
 multi_test!(

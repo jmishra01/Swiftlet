@@ -156,15 +156,16 @@ impl Swiftlet {
     }
 
     /// Tokenizes input text and returns the resulting token stream.
-    pub fn tokens(&self, text: &str) -> Vec<Token> {
+    pub fn tokens(&self, text: &str) -> Result<Vec<Token>, ParserError> {
         self.grammar_builder.tokens(text)
     }
 
     /// Prints a readable debug view of the token stream for `text`.
-    pub fn print_tokens(&self, text: &str) {
-        for token in self.tokens(text) {
+    pub fn print_tokens(&self, text: &str) -> Result<(), ParserError> {
+        for token in self.tokens(text)? {
             println!("{}", format_token_debug(&token));
         }
+        Ok(())
     }
 }
 

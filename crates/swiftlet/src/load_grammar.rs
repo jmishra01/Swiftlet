@@ -142,16 +142,13 @@ pub fn get_parser() -> Arc<ParserFrontend> {
 }
 
 /// Parses grammar text and transforms it into a runnable parser frontend.
-///
-/// Panics if grammar parsing or transformation fails.
 macro_rules! impl_load_grammar {
     ($( $extra_arg:ident : $extra_type:ty ),*) => {
         /// Loads a grammar definition into a ready-to-use parser frontend.
         pub fn load_grammar(grammar: &str, $( $extra_arg : $extra_type ),*) -> Result<Arc<ParserFrontend>, ParserError> {
-            let tree = match GRAMMAR_BUILDER.parse(grammar) {
-                Ok(tree) => tree,
-                Err(e) => panic!("Failed to parse grammar. Error: {}", e)
-            };
+            let tree = GRAMMAR_BUILDER
+                .parse(grammar)
+                .map_err(|e| ParserError::GrammarParseError(e.to_string()))?;
             $(
                 if $extra_arg.debug {
                     println!("\nAST of Grammar");
@@ -203,7 +200,11 @@ macro_rules! impl_load_grammar {
                 .flatten()
                 .for_each(|arg0: String| update_terminals(&arg0));
             }
-            let rules = tree.get_child_tree("rule").unwrap();
+            let Some(rules) = tree.get_child_tree("rule") else {
+                return Err(ParserError::GrammarParseError(
+                    "grammar does not contain any rule definitions".to_string(),
+                ));
+            };
 
             let mut transformer = RuleCompiler::new();
 
@@ -410,4 +411,19 @@ mod tests {
         "#,
         r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""*"")]), Tree("string", [Token(STRING, ""\"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "d")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "d")]), Tree("or_expansion", [Tree("expansion", [Tree("string", [Token(STRING, ""("")]), Tree("non_terminal", [Token(RULE, "e")]), Tree("string", [Token(STRING, "")"")])]), Tree("non_terminal", [Token(RULE, "v")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "v")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("import", [Tree("terminal", [Token(TERMINAL, "WS")]), Tree("terminal", [Token(TERMINAL, "INT")])]), Tree("ignore", [Tree("terminal", [Token(TERMINAL, "WS")])])])"#
     );
+
+    #[cfg(feature = "debug")]
+    #[test]
+    fn load_grammar_returns_error_instead_of_panicking_for_invalid_grammar() {
+        let parser_opt = Arc::new(ParserOption::default());
+        let result = load_grammar("start T", parser_opt);
+        assert!(matches!(result, Err(ParserError::GrammarParseError(_))));
+    }
+
+    #[cfg(not(feature = "debug"))]
+    #[test]
+    fn load_grammar_returns_error_instead_of_panicking_for_invalid_grammar() {
+        let result = load_grammar("start T");
+        assert!(matches!(result, Err(ParserError::GrammarParseError(_))));
+    }
 }
