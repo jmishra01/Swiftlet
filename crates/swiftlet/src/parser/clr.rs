@@ -1,6 +1,6 @@
 use crate::error::ParserError;
 use crate::{
-    ParserOption,
+    LexerMode, ParserOption,
     ast::AST,
     grammar::{Rule, RuleOption},
     lexer::{Symbol, Token, Tokenizer},
@@ -351,6 +351,83 @@ impl Clr {
         }
     }
 
+    fn contextual_lookahead(
+        &self,
+        state: usize,
+        offset: usize,
+        text: &str,
+    ) -> Result<Arc<Token>, ParserError> {
+        let lexer = self.parser_frontend.get_lexer();
+        let ignore = self
+            .parser_frontend
+            .get_parser()
+            .get_ignore_symbols()
+            .clone();
+        let expected = self
+            .action
+            .keys()
+            .filter(|(row, _)| *row == state)
+            .map(|(_, symbol)| symbol.clone())
+            .filter(|symbol| *symbol != get_last_symbol())
+            .collect::<HashSet<_>>();
+
+        if let Some(token) = lexer.match_terminals(text, offset, &expected, ignore.as_ref())? {
+            return Ok(token);
+        }
+
+        let normalized = lexer.skip_ignored(text, offset, ignore.as_ref());
+        if self.action.contains_key(&(state, get_last_symbol())) && normalized == text.len() {
+            return Ok(Arc::new(Token::new(
+                Arc::<str>::from(get_last_symbol().as_ref().as_str()),
+                normalized,
+                normalized + get_last_symbol().as_ref().as_str().len(),
+                0,
+                get_last_symbol(),
+            )));
+        }
+
+        Err(ParserError::FailedToParse(text.to_string()))
+    }
+
+    fn parse_contextual(&self, tokenizer: Tokenizer) -> Result<AST, ParserError> {
+        let text = tokenizer.get_text().to_string();
+        let mut stack_states = vec![0usize];
+        let mut stack_symbols = Vec::new();
+        let mut offset = 0usize;
+        let mut lookahead = self.contextual_lookahead(0, offset, &text)?;
+
+        loop {
+            let state = *stack_states.last().unwrap();
+            if let Some(lr_table) = self.action.get(&(state, lookahead.terminal.clone())) {
+                match self.get_next_action(lr_table) {
+                    Ok(action) => match action {
+                        ActionTable::Accepted => break,
+                        ActionTable::Shift(pos) => {
+                            stack_states.push(*pos);
+                            stack_symbols.push(AST::Token(lookahead.clone()));
+                            if lookahead.terminal != get_last_symbol() {
+                                offset = lookahead.get_end();
+                            }
+                            let next_state = *stack_states.last().unwrap();
+                            lookahead = self.contextual_lookahead(next_state, offset, &text)?;
+                        }
+                        ActionTable::Reduce(pos) => {
+                            self.reduce_action(*pos, &mut stack_states, &mut stack_symbols)?;
+                        }
+                    },
+                    Err(message) => return Err(message),
+                }
+            } else {
+                return Err(ParserError::RuleNotFound(lookahead.word().to_string()));
+            }
+        }
+
+        if let Some(ast) = stack_symbols.pop() {
+            return Ok(ast);
+        }
+        Err(ParserError::FailedToParse(text))
+    }
+
     /// Executes reduce action and performs goto transition.
     fn reduce_action(
         &self,
@@ -412,6 +489,10 @@ impl Parser for Clr {
 
     /// Runs CLR parse loop and returns AST or parser error.
     fn parse(&self, mut tokenizer: Tokenizer) -> Result<AST, ParserError> {
+        if !matches!(self.parser_conf.lexer_mode, LexerMode::Basic) {
+            return self.parse_contextual(tokenizer);
+        }
+
         let mut stack_states = vec![0usize];
         let mut stack_symbols = Vec::new();
         let Some(mut lookahead) = tokenizer.next_token()? else {
@@ -672,3 +753,51 @@ fn debug_canonical_and_transtion_sets(canonical_items: &VecItemSet, transitions:
     }
 }
 // ----------------------------------------------- //
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::grammar::Algorithm;
+    use crate::load_grammar::load_grammar;
+
+    #[cfg(feature = "debug")]
+    fn test_frontend(grammar: &str, parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
+        load_grammar(grammar, parser_opt).expect("failed to load grammar")
+    }
+
+    #[cfg(not(feature = "debug"))]
+    fn test_frontend(grammar: &str, _parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
+        load_grammar(grammar).expect("failed to load grammar")
+    }
+
+    #[test]
+    fn clr_contextual_lexing_handles_contextual_terminals() {
+        let grammar = r#"
+        start: "select" NAME
+        NAME: /[a-z]+/
+        %import WS
+        %ignore WS
+        "#;
+
+        let basic_opt = Arc::new(ParserOption {
+            algorithm: Algorithm::CLR,
+            ..ParserOption::default()
+        });
+        let basic_pf = test_frontend(grammar, basic_opt.clone());
+        let basic = Clr::new(basic_pf.clone(), basic_opt);
+        assert!(basic.parse(basic_pf.tokenizer("select users")).is_err());
+
+        let contextual_opt = Arc::new(ParserOption {
+            algorithm: Algorithm::CLR,
+            lexer_mode: LexerMode::Dynamic,
+            ..ParserOption::default()
+        });
+        let contextual_pf = test_frontend(grammar, contextual_opt.clone());
+        let contextual = Clr::new(contextual_pf.clone(), contextual_opt);
+        assert!(
+            contextual
+                .parse(contextual_pf.tokenizer("select users"))
+                .is_ok()
+        );
+    }
+}

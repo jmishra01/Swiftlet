@@ -203,6 +203,12 @@ class SwiftletBindingTests(unittest.TestCase):
 
         self.assertEqual(ast.get_name(), "start")
 
+    def test_clr_dynamic_lexer_mode_handles_contextual_terminals(self) -> None:
+        parser = Swiftlet(CONTEXTUAL_GRAMMAR, algorithm="clr", lexer_mode="dynamic")
+        ast = parser.parse("select users")
+
+        self.assertEqual(ast.get_name(), "start")
+
     def test_tokens_returns_python_token_wrappers(self) -> None:
         grammar = """
         s: SELECT NAME

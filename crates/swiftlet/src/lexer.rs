@@ -461,6 +461,59 @@ impl LexerConf {
         }
         None
     }
+
+    /// Matches the first terminal from `expected` at `start`, honoring terminal sort order.
+    pub(crate) fn match_terminals(
+        &self,
+        text: &str,
+        start: usize,
+        expected: &HashSet<Arc<Symbol>>,
+        ignore: &HashSet<Arc<Symbol>>,
+    ) -> Result<Option<Arc<Token>>, ParserError> {
+        let start = self.skip_ignored(text, start, ignore);
+        if start >= text.len() {
+            return Ok(None);
+        }
+
+        let slice_text = &text[start..];
+        let line = text[..start].chars().filter(|ch| *ch == '\n').count();
+
+        for terminal in self.terminals.iter() {
+            if expected.contains(&terminal.name)
+                && let Some((mt_end, _)) = terminal.capture(slice_text)
+            {
+                return Ok(Some(Arc::new(Token::new(
+                    Arc::<str>::from(text),
+                    start,
+                    start + mt_end,
+                    line,
+                    terminal.name.clone(),
+                ))));
+            }
+        }
+
+        let prefix = &text[..start];
+        let line_no = prefix.chars().filter(|ch| *ch == '\n').count() + 1;
+        let column = prefix
+            .rsplit('\n')
+            .next()
+            .map(|segment| segment.chars().count() + 1)
+            .unwrap_or(1);
+        let mut expected_names = expected
+            .iter()
+            .map(|symbol| symbol.as_ref().as_str().to_string())
+            .collect::<Vec<_>>();
+        expected_names.sort();
+
+        Err(ParserError::TokenizationError {
+            location: start,
+            line: line_no,
+            column,
+            expected: expected_names,
+            text: text.to_string(),
+            caret: format!("{}^", " ".repeat(start)),
+        })
+    }
 }
 
 /// Infers whether a symbol name is terminal or non-terminal from casing.
