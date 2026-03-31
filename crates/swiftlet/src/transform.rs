@@ -170,9 +170,8 @@ impl<'a> TerminalCompiler<'a> {
                                     let term = self.terminals[_index];
                                     match term {
                                         AST::Tree(_, term_children) => {
-                                            let &_first = term
-                                                .get_child_tree("terminal")?
-                                                .first()?;
+                                            let &_first =
+                                                term.get_child_tree("terminal")?.first()?;
                                             let token_word = self._transform(_first)?;
                                             if token_word.cmp(&child_terminal_name).is_eq() {
                                                 self._term(term_children);

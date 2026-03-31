@@ -49,22 +49,23 @@
 //!     }
 //! }
 //! ```
+pub mod ast;
 mod builder;
 mod common;
+pub mod error;
 pub mod grammar;
 pub mod lexer;
 pub mod load_grammar;
 mod macros;
 pub mod parser;
 pub mod parser_frontends;
-mod transform;
-pub mod ast;
 pub mod preclude;
-pub mod error;
+mod transform;
 
+use crate::ast::AST;
 pub use crate::builder::GrammarBuilder;
 use crate::grammar::Algorithm;
-use crate::ast::AST;
+use crate::lexer::Token;
 use crate::load_grammar::load_grammar;
 use error::ParserError;
 use std::sync::Arc;
@@ -107,17 +108,20 @@ pub struct Swiftlet {
 
 impl Swiftlet {
     /// Constructs a parser from grammar text.
-    pub fn from_string(grammar: &str, parser_option: Arc<ParserOption>) -> Result<Self, ParserError> {
+    pub fn from_string(
+        grammar: &str,
+        parser_option: Arc<ParserOption>,
+    ) -> Result<Self, ParserError> {
         #[cfg(feature = "debug")]
         let _grammar = match load_grammar(grammar, parser_option.clone()) {
             Ok(g) => g,
-            Err(err) => return Err(err)
+            Err(err) => return Err(err),
         };
 
         #[cfg(not(feature = "debug"))]
         let _grammar = match load_grammar(grammar) {
             Ok(g) => g,
-            Err(err) => return Err(err)
+            Err(err) => return Err(err),
         };
 
         Ok(Self {
@@ -137,4 +141,26 @@ impl Swiftlet {
     pub fn parse(&self, text: &str) -> Result<AST, ParserError> {
         self.grammar_builder.parse(text)
     }
+
+    /// Tokenizes input text and returns the resulting token stream.
+    pub fn tokens(&self, text: &str) -> Vec<Token> {
+        self.grammar_builder.tokens(text)
+    }
+
+    /// Prints a readable debug view of the token stream for `text`.
+    pub fn print_tokens(&self, text: &str) {
+        for token in self.tokens(text) {
+            println!("{}", format_token_debug(&token));
+        }
+    }
+}
+
+fn format_token_debug(token: &Token) -> String {
+    format!(
+        "{} -> {:?} @ {}..{}",
+        token.get_terminal(),
+        token.word(),
+        token.get_start(),
+        token.get_end()
+    )
 }

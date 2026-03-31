@@ -353,6 +353,28 @@ impl Swiftlet {
         let py_ast = convert_to_py(py, &ast)?;
         Ok(py_ast)
     }
+
+    /// Tokenizes input text and returns the resulting Python token wrappers.
+    fn tokens(&self, text: &str) -> PyResult<Vec<Token>> {
+        let parser = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("failed to acquire parser lock"))?;
+
+        let tokens = catch_unwind(AssertUnwindSafe(|| parser.tokens(text)))
+            .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?;
+
+        Ok(tokens
+            .into_iter()
+            .map(|token| Token {
+                word: token.word().to_string(),
+                start: token.get_start(),
+                end: token.get_end(),
+                line: token.get_line(),
+                terminal: token.terminal.get_value(),
+            })
+            .collect())
+    }
 }
 
 /// Initializes the Python extension module.

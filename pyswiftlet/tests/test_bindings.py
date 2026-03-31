@@ -176,6 +176,42 @@ class SwiftletBindingTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Failed during tokenization"):
             parser.parse("abc")
 
+    def test_tokens_returns_python_token_wrappers(self) -> None:
+        grammar = """
+        s: SELECT NAME
+        SELECT.10: "select"
+        NAME: /[a-z]+/
+        %import WS
+        %ignore WS
+        """
+        parser = Swiftlet(grammar)
+
+        tokens = parser.tokens("select users")
+
+        self.assertEqual([token.get_terminal() for token in tokens], ["SELECT", "NAME"])
+        self.assertEqual([token.get_word() for token in tokens], ["select", "users"])
+        self.assertEqual([token.get_start() for token in tokens], [0, 7])
+        self.assertEqual([token.get_end() for token in tokens], [6, 12])
+
+    def test_print_tokens_outputs_debug_lines(self) -> None:
+        grammar = """
+        s: SELECT NAME
+        SELECT.10: "select"
+        NAME: /[a-z]+/
+        %import WS
+        %ignore WS
+        """
+        parser = Swiftlet(grammar)
+
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            parser.print_tokens("select users")
+
+        self.assertEqual(
+            buffer.getvalue(),
+            'SELECT -> "select" @ 0..6\nNAME -> "users" @ 7..12\n',
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

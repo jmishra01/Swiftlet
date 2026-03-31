@@ -1,11 +1,11 @@
 use crate::ParserOption;
+use crate::ast::AST;
+use crate::error::ParserError;
 use crate::grammar::Algorithm;
 use crate::lexer::Tokenizer;
-use crate::ast::AST;
-use crate::parser::{clr::Clr, earley::EarleyParser, Parser};
+use crate::parser::{Parser, clr::Clr, earley::EarleyParser};
 use crate::parser_frontends::ParserFrontend;
 use std::sync::Arc;
-use crate::error::ParserError;
 
 /// Builds and executes the concrete parser selected by [`ParserOption`].
 pub struct GrammarBuilder {
@@ -28,6 +28,13 @@ impl GrammarBuilder {
     /// Tokenizes input text using the parser frontend's cached ignore symbols.
     pub fn get_tokens(&self, text: &str) -> Tokenizer {
         self.parser.get_parser_frontend().tokenizer(text)
+    }
+
+    /// Tokenizes input text and materializes the resulting token stream.
+    pub fn tokens(&self, text: &str) -> Vec<crate::lexer::Token> {
+        self.get_tokens(text)
+            .map(|token| token.as_ref().clone())
+            .collect()
     }
 
     /// Parses input text into an AST by tokenizing then invoking the selected parser.
@@ -70,6 +77,7 @@ mod tests {
 
         let mut tokenizer = builder.get_tokens("123");
         assert_eq!(tokenizer.next().unwrap().word(), "123");
+        assert_eq!(builder.tokens("123")[0].word(), "123");
         assert!(builder.parse("123").is_ok());
     }
 

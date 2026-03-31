@@ -74,6 +74,17 @@ Tree.find_data = _find_data
 Tree.scan_values = _scan_values
 Tree.find_token = _find_token
 
+def _print_tokens(self, text: str):
+    """Print the lexer output as `TERMINAL -> "word" @ start..end` lines."""
+    for token in self.tokens(text):
+        word = token.get_word().replace("\\", "\\\\").replace('"', '\\"')
+        print(
+            f'{token.get_terminal()} -> "{word}" @ '
+            f'{token.get_start()}..{token.get_end()}'
+        )
+
+Swiftlet.print_tokens = _print_tokens
+
 # ---------------------------------------------------------------------------------------------------------
 
 class ExceptionTreeType(Exception):
