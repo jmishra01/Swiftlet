@@ -25,13 +25,11 @@ NEWLINE: /\r?\n/
 "#;
 
 fn main() {
-    let parser_opt = Arc::new(
-        ParserOption {
-            algorithm: Algorithm::Earley,
-            debug: false,
-            ..Default::default()
-        }
-    );
+    let parser_opt = Arc::new(ParserOption {
+        algorithm: Algorithm::Earley,
+        debug: false,
+        ..Default::default()
+    });
     match Swiftlet::from_string(GRAMMAR, parser_opt) {
         Ok(parser) => {
             let texts = [
@@ -55,7 +53,7 @@ fn main() {
                     }
                 }
             });
-        },
+        }
         Err(err) => {
             eprintln!("{}", err);
         }

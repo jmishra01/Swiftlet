@@ -1,22 +1,17 @@
-use swiftlet::preclude::*;
 use std::sync::Arc;
-
+use swiftlet::preclude::*;
 
 fn calculate(ast: &AST) -> i32 {
     match ast {
-        AST::Token(token) => {
-            token.word().parse::<i32>().unwrap()
-        }
-        AST::Tree(tree, children) => {
-            match tree.as_str() {
-                "start" | "expr" => calculate(&children[0]),
-                "add" => calculate(&children[0]) + calculate(&children[2]),
-                "sub" => calculate(&children[0]) - calculate(&children[2]),
-                _ => {
-                    panic!("Invalid tree: {}", tree);
-                }
+        AST::Token(token) => token.word().parse::<i32>().unwrap(),
+        AST::Tree(tree, children) => match tree.as_str() {
+            "start" | "expr" => calculate(&children[0]),
+            "add" => calculate(&children[0]) + calculate(&children[2]),
+            "sub" => calculate(&children[0]) - calculate(&children[2]),
+            _ => {
+                panic!("Invalid tree: {}", tree);
             }
-        }
+        },
     }
 }
 
@@ -36,7 +31,8 @@ fn main() {
 
     match parser.parse(text) {
         Ok(tree) => {
-            println!("AST: "); tree.pretty_print();
+            println!("AST: ");
+            tree.pretty_print();
             println!("Total: {}", calculate(&tree));
         }
         Err(e) => {

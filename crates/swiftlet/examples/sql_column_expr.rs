@@ -31,13 +31,11 @@ const GRAMMAR: &str = r#"
     "#;
 
 fn main() {
-    let parser_opt = Arc::new(
-        ParserOption {
-            algorithm: Algorithm::CLR,
-            debug: true,
-            ..Default::default()
-        }
-    );
+    let parser_opt = Arc::new(ParserOption {
+        algorithm: Algorithm::CLR,
+        debug: true,
+        ..Default::default()
+    });
     match Swiftlet::from_string(GRAMMAR, parser_opt) {
         Ok(parser) => {
             let texts = [
@@ -62,11 +60,9 @@ fn main() {
                 parsed.unwrap().pretty_print();
                 println!("\n");
             });
-        },
+        }
         Err(err) => {
             eprintln!("{}", err);
         }
     }
-
-
 }

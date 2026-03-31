@@ -1,7 +1,6 @@
+use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
 use swiftlet::{ParserOption, Swiftlet};
-use std::sync::Arc;
-
 
 #[macro_use]
 mod common;
@@ -15,7 +14,8 @@ multi_test!(
     "a",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     rule_clr_char_repeat,
@@ -27,7 +27,8 @@ multi_test!(
     "aaa",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     rule_clr_alias,
@@ -39,7 +40,8 @@ multi_test!(
     "aaa",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     rule_clr_repeat_expr,
@@ -52,7 +54,8 @@ multi_test!(
     "1-23-456-78-9",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     rule_clr_opt,
@@ -67,7 +70,8 @@ multi_test!(
     "x",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);
 
 multi_test!(
     rule_clr_opt_with_char,
@@ -82,4 +86,5 @@ multi_test!(
     "xy",
     "s",
     Algorithm::CLR,
-    Algorithm::Earley);
+    Algorithm::Earley
+);

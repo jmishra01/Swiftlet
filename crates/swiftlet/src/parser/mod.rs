@@ -1,6 +1,6 @@
-use crate::lexer::Tokenizer;
 use crate::ast::AST;
 use crate::error::ParserError;
+use crate::lexer::Tokenizer;
 use crate::parser_frontends::ParserFrontend;
 use std::sync::Arc;
 

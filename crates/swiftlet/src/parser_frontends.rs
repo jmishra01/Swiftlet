@@ -145,7 +145,7 @@ mod tests {
             "INT",
             r"\d+",
             RegexFlag::default(),
-            0
+            0,
         ))]));
         let pf = ParserFrontend::new(lx.clone(), pc.clone());
 
