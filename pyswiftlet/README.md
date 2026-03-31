@@ -1,5 +1,5 @@
-# Swiftlet
-[![PyPI Downloads](https://static.pepy.tech/personalized-badge/swiftlet?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/swiftlet)
+# Swiftlet [![PyPI Downloads](https://static.pepy.tech/personalized-badge/swiftlet?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/swiftlet)
+
 
 `Swiftlet` provides Python bindings for Swiftlet, a high-performance parsing library built in Rust.
 It accepts an EBNF-style grammar and parses input text into a tree of `Tree` and `Token` nodes.
