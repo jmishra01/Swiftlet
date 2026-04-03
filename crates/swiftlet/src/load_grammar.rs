@@ -237,15 +237,17 @@ macro_rules! impl_load_grammar {
                 if $extra_arg.debug {
                     println!("\nTerminals");
                     println!("=========");
-                    for t in terminals.iter() {
-                        println!("{t:?}");
+                    for (index, t) in terminals.iter().enumerate() {
+                        println!("\t{index:?}; {t:?}");
                     }
 
                     println!("\nGrammar");
                     println!("=======");
+                    let mut index = 0;
                     for (_, prod) in rules.iter() {
                         for p in prod.iter() {
-                            println!("{p:?}");
+                            println!("\t{index:?}; {p:?}");
+                            index += 1;
                         }
                     }
                 }

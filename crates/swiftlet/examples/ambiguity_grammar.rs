@@ -8,17 +8,17 @@ use swiftlet::{ParserOption, Swiftlet};
 fn main() {
     let text = r#"
         e: t
-        ?t: x | y | i
-        ?x.1: t "+" t
-        ?y.2: t "-" t
-        i.3: "id"
+        x: t "+" t
+        y: t "-" t
+        t: x | y | i
+        i: "id"
         %import WS
         %ignore WS
         "#;
 
     let conf = Arc::new(ParserOption {
         start: "e".to_string(),
-        algorithm: Algorithm::Earley,
+        algorithm: Algorithm::CLR,
         debug: true,
         ..Default::default()
     });
@@ -28,7 +28,7 @@ fn main() {
     match text_parser.parse("id + id - id") {
         Ok(res) => res.pretty_print(),
         Err(e) => {
-            eprintln!("{:?}", e)
+            eprintln!("{e}");
         }
     }
 }

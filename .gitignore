@@ -123,6 +123,8 @@ venv.bak/
 .spyderproject
 .spyproject
 
+# Jupyter
+.ipynb_checkpoints
 
 # Rope project settings
 .ropeproject

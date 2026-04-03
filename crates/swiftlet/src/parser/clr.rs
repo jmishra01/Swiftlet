@@ -264,11 +264,11 @@ impl Clr {
             _action.iter().for_each(|(index, symbol, v)| {
                 let _symbol_value = symbol.get_value();
                 println!(
-                    "\t{} | {}{}-> {}",
+                    "\t{} | {}{}-> {:?}",
                     index,
                     symbol.get_value(),
                     " ".repeat(_symbol_max_len + 2 - _symbol_value.len()),
-                    v.first().unwrap().display()
+                    v
                 );
             });
 
@@ -379,36 +379,52 @@ impl Clr {
         let rules = lr_table
             .iter()
             .map(|x| {
-                let n = match x {
-                    ActionTable::Shift(n) => *n,
-                    ActionTable::Reduce(n) => *n,
-                    ActionTable::Accepted => 0usize,
-                };
-                (self.rules.get(n).unwrap(), x)
+                match x {
+                    ActionTable::Shift(n) => {
+                        (None, *n, x)
+                    },
+                    ActionTable::Reduce(n) => {
+                        (self.rules.get(*n), *n, x)
+                    },
+                    ActionTable::Accepted => {
+                        (self.rules.get(0), 0, x)
+                    },
+                }
+                // (self.rules.get(n).unwrap(), x)
             })
-            .collect::<Vec<(&Arc<Rule>, &ActionTable)>>();
+            .collect::<Vec<(Option<&Arc<Rule>>, usize, &ActionTable)>>();
 
         let vec_priority = rules
             .iter()
-            .map(|(r, _)| r.rule_option.priority())
-            .collect::<Vec<usize>>();
+            .map(|(r, _, _)| {
+                if let Some(r) = r {
+                    Some(r.rule_option.priority())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<Option<usize>>>();
 
         let mut hs_priority = HashSet::new();
 
         for i in vec_priority.iter() {
-            hs_priority.insert(*i);
+            if let Some(i) = i {
+                hs_priority.insert(*i);
+            }
         }
 
         if vec_priority.len() == hs_priority.len() {
-            rules
+            let rule_max = rules
                 .iter()
                 .max_by(|&x1, &x2| {
-                    x1.0.rule_option
-                        .priority()
-                        .cmp(&x2.0.rule_option.priority())
+                    match (x1.0, x2.0) {
+                        (Some(r1), Some(r2)) => r1.rule_option.priority().cmp(&r2.rule_option.priority()),
+                        _ => std::cmp::Ordering::Equal,
+                    }
                 })
                 .unwrap();
-            Ok(rules.first().unwrap().1)
+            // Ok(rules.first().unwrap().2)
+            Ok(rule_max.2)
         } else {
             let conflict = lr_table
                 .iter()
@@ -416,25 +432,9 @@ impl Clr {
                 .collect::<Vec<String>>()
                 .join("-");
 
-            let message = match conflict.as_str() {
-                "Reduce-Reduce" => {
-                    let n = match lr_table.first().unwrap() {
-                        ActionTable::Reduce(r) => r,
-                        _ => unreachable!(),
-                    };
-                    let rule = self.rules.get(*n).unwrap();
-                    format!(
-                        "Two rules reduce to same terminal: \"{}\"",
-                        rule.expansion.first().unwrap().get_value()
-                    )
-                }
-                _ => "".to_string(),
-            };
-
             Err(ParserError::Conflict {
                 lr_table: lr_table.clone(),
                 conflict,
-                message,
             })
         }
     }
@@ -524,48 +524,6 @@ impl Clr {
         Ok(true)
     }
 
-    /// Runs CLR parse loop and returns AST or parser error.
-    // fn parse_back(&self, tokenizer: &mut Tokenizer) -> Result<AST, ParserError> {
-    //     let mut stack_states = vec![0usize];
-    //     let mut stack_symbols = Vec::new();
-    //     let Some(mut lookahead) = tokenizer.next_token()? else {
-    //         return Err(ParserError::FailedToParse(tokenizer.get_text().to_string()));
-    //     };
-    //
-    //     loop {
-    //         let state = *stack_states.last().unwrap();
-    //         if let Some(lr_table) = self.action.get(&(state, lookahead.terminal.clone())) {
-    //             // Check SR & RR conflict
-    //             match self.get_next_action(lr_table) {
-    //                 Ok(action) => match action {
-    //                     ActionTable::Accepted => break,
-    //                     ActionTable::Shift(pos) => {
-    //                         lookahead = self.shift_action(
-    //                             *pos,
-    //                             &mut stack_states,
-    //                             &mut stack_symbols,
-    //                             &lookahead,
-    //                             tokenizer,
-    //                         )?;
-    //                     }
-    //                     ActionTable::Reduce(pos) => {
-    //                         self.reduce_action(*pos, &mut stack_states, &mut stack_symbols)?;
-    //                     }
-    //                 },
-    //                 Err(message) => {
-    //                     return Err(message);
-    //                 }
-    //             }
-    //         } else {
-    //             return Err(ParserError::RuleNotFound(lookahead.word().to_string()));
-    //         }
-    //     }
-    //     if let Some(ast) = stack_symbols.pop() {
-    //         return Ok(ast);
-    //     }
-    //     Err(ParserError::FailedToParse(tokenizer.get_text().to_string()))
-    // }
-
     fn get_lookahead(
         &self,
         tokenizer: &mut Tokenizer,
@@ -647,6 +605,11 @@ impl Parser for Clr {
         loop {
             let state = *stack_states.last().unwrap();
             if let Some(lr_table) = self.action.get(&(state, lookahead.token.terminal.clone())) {
+                #[cfg(feature = "debug")]
+                if self.parser_conf.debug {
+                    println!("\nstate: {:?} | lookahead: {:?}", state, lookahead);
+                    println!("lr_table: {:?}", lr_table);
+                }
                 // Check SR & RR conflict
                 match self.get_next_action(lr_table) {
                     Ok(action) => match action {
@@ -851,7 +814,7 @@ fn debug_clr_rules(rules: &[Arc<Rule>]) {
     println!("============================");
 
     for (index, rule) in rules.iter().enumerate() {
-        println!("\t{:<2}; {}", index, rule);
+        println!("\t{:>2}; {}", index, rule);
     }
     println!();
 }
@@ -890,9 +853,16 @@ fn debug_canonical_and_transtion_sets(canonical_items: &VecItemSet, transitions:
 
     println!("Transitions:");
     println!("============");
-    for ((index, sym), transition) in transitions.iter() {
+
+    let mut trans = transitions
+        .iter()
+        .map(|((k1, k2), v)| (k1, k2, v))
+        .collect::<Vec<_>>();
+    trans.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (index, sym, transition) in trans.iter() {
         println!(
-            "\t(I-{:<3}, {}): I-{}",
+            "\t(I-{:<2}, {}): I-{}",
             index,
             sym.as_ref().as_str(),
             transition
