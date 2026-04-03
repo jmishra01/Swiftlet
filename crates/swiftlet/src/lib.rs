@@ -65,7 +65,6 @@ mod transform;
 use crate::ast::AST;
 pub use crate::builder::GrammarBuilder;
 use crate::grammar::Algorithm;
-use crate::lexer::Token;
 use crate::load_grammar::load_grammar;
 use error::ParserError;
 use std::sync::Arc;
@@ -125,11 +124,10 @@ impl Swiftlet {
         grammar: &str,
         parser_option: Arc<ParserOption>,
     ) -> Result<Self, ParserError> {
+        let grammar = format!(r#"{}
+        "#, grammar.trim());
         #[cfg(feature = "debug")]
-        let _grammar = match load_grammar(grammar, parser_option.clone()) {
-            Ok(g) => g,
-            Err(err) => return Err(err),
-        };
+        let _grammar = load_grammar(&grammar, parser_option.clone())?;
 
         #[cfg(not(feature = "debug"))]
         let _grammar = match load_grammar(grammar) {
@@ -154,27 +152,4 @@ impl Swiftlet {
     pub fn parse(&self, text: &str) -> Result<AST, ParserError> {
         self.grammar_builder.parse(text)
     }
-
-    /// Tokenizes input text and returns the resulting token stream.
-    pub fn tokens(&self, text: &str) -> Result<Vec<Token>, ParserError> {
-        self.grammar_builder.tokens(text)
-    }
-
-    /// Prints a readable debug view of the token stream for `text`.
-    pub fn print_tokens(&self, text: &str) -> Result<(), ParserError> {
-        for token in self.tokens(text)? {
-            println!("{}", format_token_debug(&token));
-        }
-        Ok(())
-    }
-}
-
-fn format_token_debug(token: &Token) -> String {
-    format!(
-        "{} -> {:?} @ {}..{}",
-        token.get_terminal(),
-        token.word(),
-        token.get_start(),
-        token.get_end()
-    )
 }

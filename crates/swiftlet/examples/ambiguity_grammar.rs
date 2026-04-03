@@ -2,6 +2,9 @@ use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
 use swiftlet::{ParserOption, Swiftlet};
 
+
+/// TODO: Some time below grammar failed
+
 fn main() {
     let text = r#"
         e: t
@@ -15,7 +18,8 @@ fn main() {
 
     let conf = Arc::new(ParserOption {
         start: "e".to_string(),
-        algorithm: Algorithm::CLR,
+        algorithm: Algorithm::Earley,
+        debug: true,
         ..Default::default()
     });
 

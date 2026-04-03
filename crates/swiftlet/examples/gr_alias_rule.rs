@@ -25,6 +25,19 @@ fn main() {
         Ok(tree) => {
             println!("AST");
             tree.pretty_print();
+            /*
+            start
+              add
+                sub
+                  add
+                    expr  3
+                    +
+                    10
+                  -
+                  5
+                +
+                20
+             */
         }
         Err(e) => {
             println!("Error: {}", e);

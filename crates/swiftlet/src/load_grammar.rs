@@ -19,7 +19,7 @@ pub(crate) static PARSER: LazyLock<Arc<ParserFrontend>> = LazyLock::new(get_pars
 
 pub static GRAMMAR_BUILDER: LazyLock<GrammarBuilder> = LazyLock::new(|| {
     let tp_conf = Arc::new(ParserOption {
-        algorithm: Algorithm::CLR,
+        algorithm: Algorithm::Earley,
         ..Default::default()
     });
     GrammarBuilder::new(PARSER.clone(), tp_conf)
@@ -31,38 +31,38 @@ const _RE_FLAGS: &str = "imsux";
 pub fn get_terminals() -> Vec<Arc<TerminalDef>> {
     let _regex: String = format!(r"/(?!/)(\\/|\\\\|[^/])*?/[{_RE_FLAGS}]*");
     let terminals = vec![
-        terminal_def!("_COLON", ":", 0),
-        terminal_def!("_OR", r"|", 0),
-        terminal_def!("_DOT", r"\.(?!\.)", RegexFlag::default(), 0),
-        terminal_def!("_DOT_DOT", r"..", 0),
-        terminal_def!("RULE", r"(_|\?)?[a-z][_a-z0-9]*", RegexFlag::default(), 0),
-        terminal_def!("TERMINAL", "_?[A-Z][_A-Z0-9]*", RegexFlag::default(), 0),
+        terminal_def!("_COLON", ":", 27),
+        terminal_def!("_OR", r"|", 26),
+        terminal_def!("_DOT", r"\.(?!\.)", RegexFlag::default(), 25),
+        terminal_def!("_DOT_DOT", r"..", 24),
+        terminal_def!("RULE", r"(_|\?)?[a-z][_a-z0-9]*", RegexFlag::default(), 23),
+        terminal_def!("TERMINAL", "_?[A-Z][_A-Z0-9]*", RegexFlag::default(), 22),
         terminal_def!(
             "STRING",
             r#""(\\"|\\|[^"\n])*?"i?"#,
             RegexFlag::default(),
-            0
+            21
         ),
-        terminal_def!("REGEXP", _regex.as_str(), RegexFlag::default(), 0),
-        terminal_def!("_NL_OR", r"(\r?\n)+\s*\|", RegexFlag::default(), 0),
-        terminal_def!("_NL", r"(\r?\n)+\s*", RegexFlag::default(), 0),
-        terminal_def!("WS", r"[ \t]+", RegexFlag::default(), 0),
-        terminal_def!("BACKSLASH", r"\\[ ]*\n", RegexFlag::default(), 0),
-        terminal_def!("_TO", "->", 0),
-        terminal_def!("_IGNORE", r"%ignore", 0),
-        terminal_def!("_IMPORT", r"%import", 0),
-        terminal_def!("NUMBER", r"[+-]?\d+", RegexFlag::default(), 0),
-        terminal_def!("TILDE", "~", RegexFlag::default(), 0),
-        terminal_def!("_COMMA", ",", RegexFlag::default(), 0),
-        terminal_def!("_COLON", ":", 0),
-        terminal_def!("_OR", r"|", 0),
-        terminal_def!("_LPAR", "(", 0),
-        terminal_def!("_RPAR", ")", 0),
-        terminal_def!("_LBAR", "[", 0),
-        terminal_def!("_RBAR", "]", 0),
-        terminal_def!("_LBRACE", "{", 0),
-        terminal_def!("_RBRACE", "}", 0),
-        terminal_def!("OP", r"[+*]|[?](?![a-z_])", RegexFlag::default(), 0),
+        terminal_def!("REGEXP", _regex.as_str(), RegexFlag::default(), 20),
+        terminal_def!("_NL_OR", r"(\r?\n)+\s*\|", RegexFlag::default(), 19),
+        terminal_def!("_NL", r"(\r?\n)+\s*", RegexFlag::default(), 18),
+        terminal_def!("WS", r"[ \t]+", RegexFlag::default(), 17),
+        terminal_def!("BACKSLASH", r"\\[ ]*\n", RegexFlag::default(), 16),
+        terminal_def!("_TO", "->", 15),
+        terminal_def!("_IGNORE", r"%ignore", 14),
+        terminal_def!("_IMPORT", r"%import", 13),
+        terminal_def!("NUMBER", r"[+-]?\d+", RegexFlag::default(), 12),
+        terminal_def!("TILDE", "~", RegexFlag::default(), 11),
+        terminal_def!("_COMMA", ",", RegexFlag::default(), 10),
+        terminal_def!("_COLON", ":", 9),
+        terminal_def!("_OR", r"|", 8),
+        terminal_def!("_LPAR", "(", 7),
+        terminal_def!("_RPAR", ")", 6),
+        terminal_def!("_LBAR", "[", 5),
+        terminal_def!("_RBAR", "]", 4),
+        terminal_def!("_LBRACE", "{", 3),
+        terminal_def!("_RBRACE", "}", 2),
+        terminal_def!("OP", r"[+*]|[?](?![a-z_])", RegexFlag::default(), 1),
     ];
     terminals
 }
@@ -130,6 +130,7 @@ pub fn get_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
 
 /// Creates the parser frontend used for parsing grammar definitions.
 pub fn get_parser() -> Arc<ParserFrontend> {
+    // TODO: Add _NL in ignore list
     let parser_conf = Arc::new(ParserConf::new(
         RULES.clone(),
         Vec::from(["WS".to_string(), "COMMENT".to_string()]),

@@ -16,7 +16,7 @@ indexmap = {workspace = true}
 thiserror = {workspace = true}
 
 [features]
-default = []
+default = ["debug"]
 debug = []
 
 [profile.dev]

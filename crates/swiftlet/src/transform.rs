@@ -8,8 +8,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
 static ESCAPE: LazyLock<Regex> = LazyLock::new(|| {
-    let re = Regex::new(r"(\p{P})").unwrap();
-    re
+    Regex::new(r"(\p{P})").unwrap()
 });
 
 pub type OptVecStr = Option<Vec<String>>;
@@ -19,8 +18,7 @@ pub(crate) fn fetch_terminals(ast: &AST) -> Vec<String> {
     match ast {
         AST::Tree(_, childs) => childs
             .iter()
-            .map(fetch_terminals)
-            .flatten()
+            .flat_map(fetch_terminals)
             .collect::<Vec<_>>(),
         AST::Token(token) => {
             let word = token.word();
@@ -52,7 +50,7 @@ impl<'a> TerminalCompiler<'a> {
     }
 
     pub fn get_terminals(&self) -> Vec<Arc<TerminalDef>> {
-        self.map.values().map(|t| t.clone()).collect::<Vec<_>>()
+        self.map.values().cloned().collect::<Vec<_>>()
     }
 
     pub fn compile(&mut self) {
@@ -96,8 +94,8 @@ impl<'a> TerminalCompiler<'a> {
             }
         }
 
-        let mut pattern = if flags.len() > 0 {
-            format!("(?{}:{})", flags, pattern.to_string())
+        let mut pattern = if !flags.is_empty() {
+            format!("(?{}:{})", flags, pattern)
         } else {
             pattern.to_string()
         };
@@ -181,10 +179,7 @@ impl<'a> TerminalCompiler<'a> {
                                     }
                                 }
                             }
-                            match self.map.get(&child_terminal_name) {
-                                Some(term) => Some(term.value.clone()),
-                                None => None,
-                            }
+                            self.map.get(&child_terminal_name).map(|term| term.value.clone())
                         }
                         _ => self._transform(c),
                     },
@@ -339,7 +334,7 @@ impl RuleCompiler {
     /// Transforms OR alternatives and memoizes generated helper rules.
     fn or_expansion(&mut self, tree: &[AST]) -> OptVecStr {
         if tree.len() == 1 {
-            return self._transform(&tree.first().unwrap());
+            return self._transform(tree.first().unwrap());
         }
 
         let result: Vec<String> = tree

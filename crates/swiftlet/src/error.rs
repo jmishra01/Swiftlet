@@ -22,7 +22,7 @@ pub enum ParserError {
     #[error("Failed to parse grammar: {0}")]
     GrammarParseError(String),
     #[error(
-        "Tokenization failed at byte {location} (line {line}, column {column}). Expected one of: {expected:?}\n{text}\n{caret}"
+        "Tokenization failed at text {location} (line {line}, column {column}). Expected one of: {expected:?}\n{text}\n{caret}"
     )]
     TokenizationError {
         location: usize,

@@ -14,5 +14,5 @@ pub trait Parser {
     fn get_parser_frontend(&self) -> Arc<ParserFrontend>;
 
     /// Parses token stream into AST.
-    fn parse(&self, token: Tokenizer) -> Result<AST, ParserError>;
+    fn parse(&self, token: &mut Tokenizer) -> Result<AST, ParserError>;
 }

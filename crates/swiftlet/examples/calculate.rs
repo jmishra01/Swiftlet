@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 use swiftlet::preclude::*;
 
 fn calculate(ast: &AST) -> i32 {
@@ -25,12 +26,16 @@ fn main() {
         %ignore WS
         "#;
 
-    let conf = Arc::new(ParserOption::default());
+    let t1 = Instant::now();
+    let conf = Arc::new(ParserOption {algorithm: Algorithm::Earley, ..Default::default()});
     let parser = Swiftlet::from_string(grammar, conf).expect("failed to get parser");
     let text = "10 - 2 + 5 - 2";
 
+    println!("T1 - {:?}", t1.elapsed());
+    let t2 = Instant::now();
     match parser.parse(text) {
         Ok(tree) => {
+            println!("T2 - {:?}", t2.elapsed());
             println!("AST: ");
             tree.pretty_print();
             println!("Total: {}", calculate(&tree));

@@ -143,7 +143,7 @@ fn inline_print(tree: &AST) -> String {
             let word = token.word().to_string();
             let terminal = token.terminal.get_value();
             if terminal.starts_with("__") {
-                format!("{}", word)
+                format!("{:?}", word)
             } else {
                 format!(
                     "Token({}, \"{}\")",

@@ -88,30 +88,10 @@ fn bench_func(c: &mut Criterion) {
         });
 
         // ------- EARLEY -------- //
-        let earley_bench_name = format!("Grammar {} | EARLEY Parser | BASIC", i);
+        let earley_bench_name = format!("Grammar {} | EARLEY Parser", i);
         c.bench_function(earley_bench_name.as_str(), |b| {
             b.iter(|| {
                 let conf = Arc::new(ParserOption {lexer_mode: LexerMode::Basic, ..Default::default()});
-                if let Ok(parser) = Swiftlet::from_string(grammar, conf) {
-                    let _ = parser.parse(text);
-                }
-            })
-        });
-
-        let earley_bench_name = format!("Grammar {} | EARLEY Parser | Scannerless", i);
-        c.bench_function(earley_bench_name.as_str(), |b| {
-            b.iter(|| {
-                let conf = Arc::new(ParserOption {lexer_mode: LexerMode::Scannerless, ..Default::default()});
-                if let Ok(parser) = Swiftlet::from_string(grammar, conf) {
-                    let _ = parser.parse(text);
-                }
-            })
-        });
-
-        let earley_bench_name = format!("Grammar {} | EARLEY Parser | Dynamic", i);
-        c.bench_function(earley_bench_name.as_str(), |b| {
-            b.iter(|| {
-                let conf = Arc::new(ParserOption {lexer_mode: LexerMode::Dynamic, ..Default::default()});
                 if let Ok(parser) = Swiftlet::from_string(grammar, conf) {
                     let _ = parser.parse(text);
                 }

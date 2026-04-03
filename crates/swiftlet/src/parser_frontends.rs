@@ -96,7 +96,6 @@ impl ParserFrontend {
 mod tests {
     use super::*;
     use crate::grammar::RuleOption;
-    use crate::lexer::{RegexFlag, TerminalDef};
 
     fn sample_rule(origin: &str, expansion: &[&str]) -> Arc<Rule> {
         Arc::new(Rule::new(
@@ -136,22 +135,5 @@ mod tests {
         assert_eq!(pc.next_expansion(&expr).count(), 1);
         assert_eq!(pc.get_all_expansion().len(), 2);
         assert_eq!(pc.get_expansion(&expr).unwrap().len(), 1);
-    }
-
-    #[test]
-    fn parser_frontend_exposes_lexer_and_parser() {
-        let pc = Arc::new(ParserConf::new(HashMap::new(), vec![]));
-        let lx = Arc::new(LexerConf::new(vec![Arc::new(TerminalDef::with_regex(
-            "INT",
-            r"\d+",
-            RegexFlag::default(),
-            0,
-        ))]));
-        let pf = ParserFrontend::new(lx.clone(), pc.clone());
-
-        let mut tk = pf.tokenizer("42");
-        assert_eq!(tk.next().unwrap().word(), "42");
-        assert!(Arc::ptr_eq(pf.get_parser(), &pc));
-        assert!(Arc::ptr_eq(&pf.get_lexer(), &lx));
     }
 }

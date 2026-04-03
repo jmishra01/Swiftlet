@@ -207,46 +207,6 @@ multi_test!(
     Algorithm::Earley
 );
 
-#[test]
-fn terminal_public_token_stream_uses_priorities() {
-    let grammar = r#"
-    s: SELECT NAME
-    SELECT.10: "select"
-    NAME: /[a-z]+/
-    %import WS
-    %ignore WS
-    "#;
-    let parser_opt = Arc::new(ParserOption::default());
-    let parser = Swiftlet::from_string(grammar, parser_opt).expect("failed to build parser");
-
-    let tokens = parser.tokens("select users").expect("failed to tokenize");
-    let terminals = tokens
-        .iter()
-        .map(|token| token.get_terminal())
-        .collect::<Vec<_>>();
-    let words = tokens.iter().map(|token| token.word()).collect::<Vec<_>>();
-
-    assert_eq!(terminals, vec!["SELECT".to_string(), "NAME".to_string()]);
-    assert_eq!(words, vec!["select", "users"]);
-}
-
-#[test]
-fn terminal_public_print_tokens_debug_view_does_not_panic() {
-    let grammar = r#"
-    s: SELECT NAME
-    SELECT.10: "select"
-    NAME: /[a-z]+/
-    %import WS
-    %ignore WS
-    "#;
-    let parser_opt = Arc::new(ParserOption::default());
-    let parser = Swiftlet::from_string(grammar, parser_opt).expect("failed to build parser");
-
-    parser
-        .print_tokens("select users")
-        .expect("failed to print tokens");
-}
-
 multi_test!(
     terminal_clr_maybe_ab,
     terminal_earley_maybe_ab,
