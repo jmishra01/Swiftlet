@@ -3,7 +3,7 @@ use pyo3::prelude::*;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Mutex};
 use swiftlet::{
-    Ambiguity as RustAmbiguity, LexerMode as RustLexerMode, ParserOption, Swiftlet as RustSwiftlet,
+    Ambiguity as RustAmbiguity, ParserOption, Swiftlet as RustSwiftlet,
     ast::AST, grammar::Algorithm as RustAlgorithm,
 };
 
@@ -29,18 +29,6 @@ fn parse_ambiguity(value: &str) -> PyResult<RustAmbiguity> {
     }
 }
 
-/// Parses the Python-facing lexer mode into the Rust enum.
-fn parse_lexer_mode(value: &str) -> PyResult<RustLexerMode> {
-    match value.to_ascii_lowercase().as_str() {
-        "basic" => Ok(RustLexerMode::Basic),
-        "dynamic" => Ok(RustLexerMode::Dynamic),
-        "scannerless" => Ok(RustLexerMode::Scannerless),
-        _ => Err(PyValueError::new_err(format!(
-            "invalid lexer_mode '{value}', expected 'basic', 'dynamic' or 'scannerless'"
-        ))),
-    }
-}
-
 /// Converts a panic payload into a readable Python error message.
 fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
     if let Some(message) = payload.downcast_ref::<String>() {
@@ -57,14 +45,12 @@ fn build_parser_option(
     start: &str,
     algorithm: &str,
     ambiguity: &str,
-    lexer_mode: &str,
     debug: bool,
 ) -> PyResult<Arc<ParserOption>> {
     Ok(Arc::new(ParserOption {
         start: start.to_string(),
         algorithm: parse_algorithm(algorithm)?,
         ambiguity: parse_ambiguity(ambiguity)?,
-        lexer_mode: parse_lexer_mode(lexer_mode)?,
         debug,
     }))
 }
@@ -75,10 +61,9 @@ fn build_parser_from_grammar(
     start: &str,
     algorithm: &str,
     ambiguity: &str,
-    lexer_mode: &str,
     debug: bool,
 ) -> PyResult<RustSwiftlet> {
-    let parser_option = build_parser_option(start, algorithm, ambiguity, lexer_mode, debug)?;
+    let parser_option = build_parser_option(start, algorithm, ambiguity, debug)?;
     let parser = catch_unwind(AssertUnwindSafe(|| {
         RustSwiftlet::from_string(grammar, parser_option)
     }))
@@ -92,10 +77,9 @@ fn build_parser_from_file(
     start: &str,
     algorithm: &str,
     ambiguity: &str,
-    lexer_mode: &str,
     debug: bool,
 ) -> PyResult<RustSwiftlet> {
-    let parser_option = build_parser_option(start, algorithm, ambiguity, lexer_mode, debug)?;
+    let parser_option = build_parser_option(start, algorithm, ambiguity, debug)?;
     let parser = catch_unwind(AssertUnwindSafe(|| {
         RustSwiftlet::from_file(file.to_string(), parser_option)
     }))
@@ -323,37 +307,35 @@ pub struct Swiftlet {
 #[pymethods]
 impl Swiftlet {
     #[new]
-    #[pyo3(signature = (grammar, start="start", algorithm="earley", ambiguity="resolve", lexer_mode="basic", debug=false))]
+    #[pyo3(signature = (grammar, start="start", algorithm="earley", ambiguity="resolve", debug=false))]
     /// Constructs a parser from grammar text.
     fn new(
         grammar: &str,
         start: &str,
         algorithm: &str,
         ambiguity: &str,
-        lexer_mode: &str,
         debug: bool,
     ) -> PyResult<Self> {
         Ok(Self {
             inner: Mutex::new(build_parser_from_grammar(
-                grammar, start, algorithm, ambiguity, lexer_mode, debug,
+                grammar, start, algorithm, ambiguity, debug,
             )?),
         })
     }
 
     #[staticmethod]
-    #[pyo3(signature = (file, start="start", algorithm="earley", ambiguity="resolve", lexer_mode="basic", debug=false))]
+    #[pyo3(signature = (file, start="start", algorithm="earley", ambiguity="resolve", debug=false))]
     /// Constructs a parser from a grammar file path.
     fn from_file(
         file: &str,
         start: &str,
         algorithm: &str,
         ambiguity: &str,
-        lexer_mode: &str,
         debug: bool,
     ) -> PyResult<Self> {
         Ok(Self {
             inner: Mutex::new(build_parser_from_file(
-                file, start, algorithm, ambiguity, lexer_mode, debug,
+                file, start, algorithm, ambiguity, debug,
             )?),
         })
     }

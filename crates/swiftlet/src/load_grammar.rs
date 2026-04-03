@@ -19,7 +19,7 @@ pub(crate) static PARSER: LazyLock<Arc<ParserFrontend>> = LazyLock::new(get_pars
 
 pub static GRAMMAR_BUILDER: LazyLock<GrammarBuilder> = LazyLock::new(|| {
     let tp_conf = Arc::new(ParserOption {
-        algorithm: Algorithm::Earley,
+        algorithm: Algorithm::CLR,
         ..Default::default()
     });
     GrammarBuilder::new(PARSER.clone(), tp_conf)
@@ -269,13 +269,24 @@ impl_load_grammar!();
 mod tests {
     use super::*;
 
+    fn normalize_grammar(grammar: &str) -> String {
+        let mut normalized = grammar
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        normalized.push('\n');
+        normalized
+    }
+
     macro_rules! make_test_case {
         ($fn_name:ident, $grammar:expr, $left: expr) => {
             #[test]
             fn $fn_name() {
-                let text = $grammar;
+                let text = normalize_grammar($grammar);
                 let left = $left;
-                if let Ok(ast) = GRAMMAR_BUILDER.parse(text) {
+                if let Ok(ast) = GRAMMAR_BUILDER.parse(&text) {
                     let right = ast.get_text();
                     assert_eq!(left, right);
                 } else {

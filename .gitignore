@@ -31,6 +31,9 @@ __pycache__/
 
 # C extensions
 *.so
+*.dSYM
+*.dylib.*
+*.dylib
 
 # Distribution / packaging
 .Python
@@ -139,3 +142,4 @@ venv.bak/
 
 # Few md files
 TODO.md
+

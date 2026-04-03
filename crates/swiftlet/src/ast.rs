@@ -279,10 +279,10 @@ mod tests {
         );
 
         assert_eq!(inline_print(&regular_token), r#"Token(IDENT, "abc")"#);
-        assert_eq!(inline_print(&hidden_token), " ");
+        assert_eq!(inline_print(&hidden_token), r#"" ""#);
         assert_eq!(
             inline_print(&tree),
-            r#"Tree("pair", [Token(IDENT, "abc"),  ])"#
+            r#"Tree("pair", [Token(IDENT, "abc"), " "])"#
         );
         assert_eq!(tree.get_text(), inline_print(&tree));
     }

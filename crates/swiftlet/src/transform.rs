@@ -198,7 +198,7 @@ impl<'a> TerminalCompiler<'a> {
         let priority = if child.len() > 2 {
             self._transform(&child[1])?.parse::<usize>().unwrap()
         } else {
-            5
+            0
         };
         let second_child = child.last().unwrap();
         let value = self._transform(second_child)?;
@@ -506,7 +506,7 @@ impl RuleCompiler {
                     i: is_case_insensitive,
                     ..Default::default()
                 },
-                10
+                1
             ));
         } else {
             self.terminal

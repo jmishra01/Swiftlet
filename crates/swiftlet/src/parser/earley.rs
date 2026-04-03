@@ -1,7 +1,7 @@
 use crate::ast::AST;
 use crate::error::ParserError;
 use crate::grammar::{Rule, RuleOption};
-use crate::lexer::{Symbol, Token, Tokenizer};
+use crate::lexer::{Symbol, Token, TokenMatch, Tokenizer};
 use crate::parser::Parser;
 use crate::parser::utils::dot_state;
 use crate::parser_frontends::ParserFrontend;
@@ -21,7 +21,12 @@ pub struct State {
     pub children: Vec<AST>,
 }
 
-pub(crate) struct SymbolTokenState(Arc<Symbol>, Option<Arc<Token>>, usize);
+pub(crate) struct SymbolTokenState {
+    symbol: Arc<Symbol>,
+    token_match: TokenMatch,
+    state_index: usize,
+    priority: usize,
+}
 
 /// Deduplication key for Earley states that ignores child trees.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -241,11 +246,19 @@ impl EarleyParser {
             let _ = chart[i + 1].insert(next_state);
     }
 
-    fn finalize_basic_parse(&self, chart: &[ChartColumn], tokenizer: &mut Tokenizer,
-                            expected_token: &[SymbolTokenState]) -> Result<AST, ParserError> {
-        let mut complete_parsed_tree = chart
-            .last()
-            .unwrap()
+    fn finalize_basic_parse(
+        &self,
+        chart: &[ChartColumn],
+        tokenizer: &mut Tokenizer,
+        expected_token: &[Arc<Symbol>],
+    ) -> Result<AST, ParserError> {
+        let Some(last_column) = chart.last() else {
+            return Err(ParserError::FailedToParse(
+                "earley parser produced no chart columns".to_string(),
+            ));
+        };
+
+        let mut complete_parsed_tree = last_column
             .states
             .iter()
             .filter(|x| x.rule.origin.as_ref().as_str() == "gamma");
@@ -261,7 +274,12 @@ impl EarleyParser {
             Ambiguity::Explicit => {
                 let mut children = Vec::new();
                 for states in complete_parsed_tree {
-                    children.push(states.children.first().cloned().unwrap());
+                    let Some(child) = states.children.first() else {
+                        return Err(ParserError::FailedToParse(
+                            "completed parse state did not contain a child AST".to_string(),
+                        ));
+                    };
+                    children.push(child.clone());
                 }
 
                 if !children.is_empty() {
@@ -273,7 +291,7 @@ impl EarleyParser {
         let exp = expected_token
                      .iter()
                      .map(|x| {
-                         let t = tokenizer.get_terminal_def(&x.0).unwrap();
+                         let t = tokenizer.get_terminal_def(x).unwrap();
                          t.value.clone()
                      })
                      .collect::<Vec<_>>();
@@ -317,7 +335,7 @@ impl Parser for EarleyParser {
         }
 
         let mut next_possible_symbols: Vec<SymbolTokenState> = Vec::new();
-        let mut prev_next_symbol: Vec<SymbolTokenState> = Vec::new();
+        let mut prev_next_symbol: Vec<Arc<Symbol>> = Vec::new();
 
         while i <= j {
             if chart.get(i).is_none() {
@@ -325,10 +343,13 @@ impl Parser for EarleyParser {
             }
 
             if !next_possible_symbols.is_empty() {
-                prev_next_symbol = next_possible_symbols;
+                prev_next_symbol = next_possible_symbols
+                    .iter()
+                    .map(|candidate| candidate.symbol.clone())
+                    .collect();
             }
 
-            next_possible_symbols = vec![];
+            next_possible_symbols = Vec::new();
 
             #[cfg(feature = "debug")]
             let mut token_arr = vec![];
@@ -346,13 +367,27 @@ impl Parser for EarleyParser {
                     {
                         self.prediction(&mut chart, &mut worklist, next_symbol, i);
                     } else {
-                        let token = token_iter.next_token_with_next_symbol(next_symbol.clone())?;
-                        if token.is_some() {
-                            next_possible_symbols.push(SymbolTokenState(next_symbol.clone(), token.clone(), state_index));
+                        if let Some(token_match) =
+                            token_iter.peek_token_with_next_symbol(next_symbol.clone())?
+                        {
+                            let priority = token_iter
+                                .get_terminal_def(&next_symbol)
+                                .map(|terminal_def| terminal_def.priority)
+                                .unwrap_or_default();
+                            next_possible_symbols.push(SymbolTokenState {
+                                symbol: next_symbol.clone(),
+                                token_match,
+                                state_index,
+                                priority,
+                            });
                         }
                         #[cfg(feature = "debug")]
                         if self.parser_config.debug {
-                            token_arr.push(token.clone());
+                            token_arr.push(
+                                next_possible_symbols
+                                    .last()
+                                    .map(|candidate| candidate.token_match.token.clone()),
+                            );
                         }
                     }
                 }
@@ -360,48 +395,44 @@ impl Parser for EarleyParser {
 
             let mut filter_tokens = next_possible_symbols
                 .iter()
-                .filter(|&tk| tk.1.is_some())
                 .collect::<Vec<_>>();
 
             if filter_tokens.len() > 1 {
                 filter_tokens
                     .sort_by(|a, b| {
-                        let _a = token_iter.get_terminal_def(&a.0).unwrap();
-                        let _b = token_iter.get_terminal_def(&b.0).unwrap();
-                        _b.priority.cmp(&_a.priority)
+                        b.priority
+                            .cmp(&a.priority)
+                            .then_with(|| {
+                                b.token_match
+                                    .next_start
+                                    .cmp(&a.token_match.next_start)
+                            })
                     });
             }
 
-            if !filter_tokens.is_empty(){
-                // First
-                let sym_tk_st = filter_tokens.first().unwrap();
-                let tk = sym_tk_st.1.clone().unwrap();
-                let state = chart[i].states[sym_tk_st.2].clone();
+            if let Some(sym_tk_st) = filter_tokens.first() {
+                let tk = sym_tk_st.token_match.token.clone();
+                let state = chart[i].states[sym_tk_st.state_index].clone();
 
                 self.scan(&mut chart, tk.clone(), &state, i);
-
-                let word = tk.word();
-                token_iter.inc_start(word.len());
+                token_iter.commit_token_match(&sym_tk_st.token_match);
 
                 j += 1;
 
-                let terminal_def = token_iter.get_terminal_def(&sym_tk_st.0).unwrap();
-                let priority = terminal_def.priority;
+                let priority = sym_tk_st.priority;
+                let next_start = sym_tk_st.token_match.next_start;
 
-
-                for _sym_tk_st in filter_tokens.iter().skip(1) {
-                    if _sym_tk_st.1.is_none() {
-                        continue;
+                for alternative in filter_tokens.iter().skip(1) {
+                    if priority != alternative.priority {
+                        break;
                     }
 
-                    let terminal_def = token_iter.get_terminal_def(&_sym_tk_st.0).unwrap();
-                    if priority != terminal_def.priority {
-                        break
+                    if next_start != alternative.token_match.next_start {
+                        break;
                     }
 
-                    let tk = _sym_tk_st.1.clone().unwrap();
-
-                    let state = chart[i].states[_sym_tk_st.2].clone();
+                    let tk = alternative.token_match.token.clone();
+                    let state = chart[i].states[alternative.state_index].clone();
                     self.scan(&mut chart, tk.clone(), &state, i);
                 }
             }
@@ -439,14 +470,25 @@ mod tests {
     use crate::grammar::Algorithm;
     use crate::load_grammar::load_grammar;
 
+    fn normalize_grammar(grammar: &str) -> String {
+        let mut normalized = grammar
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        normalized.push('\n');
+        normalized
+    }
+
     #[cfg(feature = "debug")]
     fn test_frontend(grammar: &str, parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
-        load_grammar(grammar, parser_opt).expect("failed to load grammar")
+        load_grammar(&normalize_grammar(grammar), parser_opt).expect("failed to load grammar")
     }
 
     #[cfg(not(feature = "debug"))]
     fn test_frontend(grammar: &str, _parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
-        load_grammar(grammar).expect("failed to load grammar")
+        load_grammar(&normalize_grammar(grammar)).expect("failed to load grammar")
     }
 
     #[test]
@@ -494,29 +536,6 @@ mod tests {
         assert_eq!(ast.get_tree_name(), Some(&"_ambiguity".to_string()));
     }
 
-    // #[test]
-    // fn earley_dynamic_lexing_handles_contextual_terminals() {
-    //     let grammar = r#"
-    //     start: "select" NAME
-    //     NAME: /[a-z]+/
-    //     %import WS
-    //     %ignore WS
-    //     "#;
-    //
-    //     let basic_opt = Arc::new(ParserOption::default());
-    //     let basic_pf = test_frontend(grammar, basic_opt.clone());
-    //     let basic = EarleyParser::new(basic_pf.clone(), basic_opt);
-    //     assert!(basic.parse(basic_pf.tokenizer("select users")).is_err());
-    //
-    //     let dynamic_opt = Arc::new(ParserOption {
-    //         lexer_mode: LexerMode::Dynamic,
-    //         ..ParserOption::default()
-    //     });
-    //     let dynamic_pf = test_frontend(grammar, dynamic_opt.clone());
-    //     let dynamic = EarleyParser::new(dynamic_pf.clone(), dynamic_opt);
-    //     assert!(dynamic.parse(dynamic_pf.tokenizer("select users")).is_ok());
-    // }
-
     #[test]
     fn earley_handles_contextual_terminals() {
         let grammar = r#"
@@ -533,5 +552,41 @@ mod tests {
         let parser = EarleyParser::new(_pf.clone(), _opt);
         let mut tk = _pf.tokenizer("select users");
         assert!(parser.parse(&mut tk).is_ok());
+    }
+
+    #[test]
+    fn earley_prefers_longer_same_priority_match_when_shorter_branch_cannot_finish() {
+        let grammar = r#"
+        start: AB C | A B
+        AB: "ab"
+        A: "a"
+        B: "b"
+        C: "c"
+        "#;
+
+        let parser_opt = Arc::new(ParserOption::default());
+        let pf = test_frontend(grammar, parser_opt.clone());
+        let parser = EarleyParser::new(pf.clone(), parser_opt);
+        let mut tk = pf.tokenizer("abc");
+
+        assert!(parser.parse(&mut tk).is_ok());
+    }
+
+    #[test]
+    fn finalize_basic_parse_returns_error_for_empty_chart() {
+        let parser_opt = Arc::new(ParserOption::default());
+        let pf = test_frontend(
+            r#"
+            start: "x"
+            "#,
+            parser_opt.clone(),
+        );
+        let parser = EarleyParser::new(pf, parser_opt);
+        let mut tk = parser.get_parser_frontend().tokenizer("x");
+
+        let err = parser
+            .finalize_basic_parse(&[], &mut tk, &[])
+            .expect_err("empty chart should return an error");
+        assert!(matches!(err, ParserError::FailedToParse(_)));
     }
 }

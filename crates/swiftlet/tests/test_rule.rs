@@ -88,3 +88,75 @@ multi_test!(
     Algorithm::CLR,
     Algorithm::Earley
 );
+
+multi_test_multi_input_texts!(
+    rule_clr_alternatives,
+    rule_earley_alternatives,
+    r#"
+    s: hello | namaste
+    hello: "Hello"
+    namaste: "Namaste"
+    "#,
+    ["Hello", "Namaste"],
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+multi_test_multi_input_texts!(
+    rule_clr_grouped_alternatives,
+    rule_earley_grouped_alternatives,
+    r#"
+    s: (hello | namaste) world
+    hello: "Hello"
+    namaste: "Namaste"
+    world: "World"
+    "#,
+    ["HelloWorld", "NamasteWorld"],
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+multi_test!(
+    rule_clr_group_repeat_plus,
+    rule_earley_group_repeat_plus,
+    r#"
+    s: number ("+" number)+
+    number: /\d+/
+    "#,
+    "1+2+3",
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+multi_test_multi_input_texts!(
+    rule_clr_group_repeat_star,
+    rule_earley_group_repeat_star,
+    r#"
+    s: number ("+" number)*
+    number: /\d+/
+    "#,
+    ["1", "1+2+3"],
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+multi_test!(
+    rule_clr_alias_alternatives,
+    rule_earley_alias_alternatives,
+    r#"
+    s: expr
+    expr: expr "+" INT -> add
+        | expr "-" INT -> sub
+        | INT
+    %import (WS, INT)
+    %ignore WS
+    "#,
+    "3 + 10 - 5 + 20",
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);

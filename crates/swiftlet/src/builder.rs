@@ -43,14 +43,25 @@ mod tests {
     use crate::load_grammar::load_grammar;
     use std::sync::Arc;
 
+    fn normalize_grammar(grammar: &str) -> String {
+        let mut normalized = grammar
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        normalized.push('\n');
+        normalized
+    }
+
     #[cfg(feature = "debug")]
     fn test_frontend(grammar: &str, parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
-        load_grammar(grammar, parser_opt).expect("failed to load grammar")
+        load_grammar(&normalize_grammar(grammar), parser_opt).expect("failed to load grammar")
     }
 
     #[cfg(not(feature = "debug"))]
     fn test_frontend(grammar: &str, _parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
-        load_grammar(grammar).expect("failed to load grammar")
+        load_grammar(&normalize_grammar(grammar)).expect("failed to load grammar")
     }
 
     fn grammar_text() -> &'static str {

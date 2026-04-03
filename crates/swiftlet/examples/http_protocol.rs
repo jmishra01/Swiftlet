@@ -40,7 +40,6 @@ BODY: /.+/s
 fn main() {
     let parser_opt = Arc::new(ParserOption {
         algorithm: Algorithm::Earley,
-        lexer_mode: LexerMode::Dynamic,
         debug: false,
         ..Default::default()
     });

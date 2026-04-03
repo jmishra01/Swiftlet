@@ -282,6 +282,14 @@ impl PartialEq for Token {
 
 impl Eq for Token {}
 
+/// Stores a side-effect-free token probe together with the tokenizer state after commit.
+#[derive(Clone, Debug)]
+pub(crate) struct TokenMatch {
+    pub(crate) token: Arc<Token>,
+    pub(crate) next_start: usize,
+    pub(crate) next_line: usize,
+}
+
 /// Tokenizes input text using the configured terminal definitions.
 #[derive(Debug, Clone)]
 pub struct Tokenizer {
@@ -339,6 +347,11 @@ impl Tokenizer {
     /// Returns the original tokenizer input text.
     pub(crate) fn get_text(&self) -> &str {
         &self.text
+    }
+
+    pub(crate) fn commit_token_match(&mut self, token_match: &TokenMatch) {
+        self.start = token_match.next_start;
+        self.line = token_match.next_line;
     }
 
     fn line_column(&self, location: usize) -> (usize, usize) {
@@ -412,43 +425,58 @@ impl Tokenizer {
     }
 
 
-    pub fn next_token_with_next_symbol(
-        &mut self,
+    pub(crate) fn peek_token_with_next_symbol(
+        &self,
         next_symbols: Arc<Symbol>,
-    ) -> Result<Option<Arc<Token>>, ParserError> {
-        if self.start < self.len {
-            let slice_text = &self.text[self.start..];
+    ) -> Result<Option<TokenMatch>, ParserError> {
+        let Some(terminal) = self.sym_terminal_def.get(&next_symbols) else {
+            return Ok(None);
+        };
 
-            let terminals = self.sym_terminal_def.get(&next_symbols);
-            if terminals.is_none() {
-                return Ok(None);
-            }
-            let terminal = terminals.unwrap();
+        let mut start = self.start;
+        let mut line = self.line;
 
-            match terminal.capture(slice_text) {
-                Some((mt_end, _mt_len)) => {
-                    let token = Arc::new(Token::new(
+        while start < self.len {
+            let slice_text = &self.text[start..];
+
+            if let Some((mt_end, _)) = terminal.capture(slice_text) {
+                let next_line = if terminal.name.as_ref().as_str() == "_NL" {
+                    line + 1
+                } else {
+                    line
+                };
+                return Ok(Some(TokenMatch {
+                    token: Arc::new(Token::new(
                         self.text.clone(),
-                        self.start,
-                        mt_end + self.start,
-                        self.line,
+                        start,
+                        start + mt_end,
+                        line,
                         terminal.name.clone(),
-                    ));
-                    return Ok(Some(token));
-                },
-                None => {
-                    for ig in self.ignore.iter() {
-                        if let Some(term_def) = self.sym_terminal_def.get(ig) && let Some((mt_end, _)) = term_def.pattern.capture(slice_text) {
-                                if term_def.name.as_ref().as_str() == "_NL" {
-                                    self.line += 1;
-                                }
-                                self.inc_start(mt_end);
-                                return self.next_token_with_next_symbol(next_symbols.clone())
-                        }
+                    )),
+                    next_start: start + mt_end,
+                    next_line,
+                }));
+            }
+
+            let mut ignored = false;
+            for ig in self.ignore.iter() {
+                if let Some(term_def) = self.sym_terminal_def.get(ig)
+                    && let Some((mt_end, _)) = term_def.pattern.capture(slice_text)
+                {
+                    if term_def.name.as_ref().as_str() == "_NL" {
+                        line += 1;
                     }
+                    start += mt_end;
+                    ignored = true;
+                    break;
                 }
             }
+
+            if !ignored {
+                return Ok(None);
+            }
         }
+
         Ok(None)
     }
 }
