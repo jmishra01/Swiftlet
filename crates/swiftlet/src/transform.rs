@@ -34,23 +34,28 @@ pub(crate) fn fetch_terminals(ast: &AST) -> Vec<String> {
 pub struct TerminalCompiler<'a> {
     terminals: Vec<&'a AST>,
     map: HashMap<String, Arc<TerminalDef>>,
+    local_terminal_names: Vec<String>,
     index: usize,
     terminal_len: usize,
 }
 
 impl<'a> TerminalCompiler<'a> {
-    pub fn new(terminals: Vec<&'a AST>) -> Self {
+    pub fn new(terminals: Vec<&'a AST>, known_terminals: HashMap<String, Arc<TerminalDef>>) -> Self {
         let terminal_len = terminals.len();
         Self {
             terminals,
-            map: HashMap::new(),
+            map: known_terminals,
+            local_terminal_names: Vec::new(),
             index: 0,
             terminal_len,
         }
     }
 
     pub fn get_terminals(&self) -> Vec<Arc<TerminalDef>> {
-        self.map.values().cloned().collect::<Vec<_>>()
+        self.local_terminal_names
+            .iter()
+            .filter_map(|name| self.map.get(name).cloned())
+            .collect()
     }
 
     pub fn compile(&mut self) {
@@ -204,6 +209,7 @@ impl<'a> TerminalCompiler<'a> {
         let value = self._transform(second_child)?;
         let terminal_def =
             TerminalDef::with_regex(&name_term, &value, RegexFlag::default(), priority);
+        self.local_terminal_names.push(name_term.clone());
         self.map.insert(name_term, Arc::new(terminal_def));
         None
     }

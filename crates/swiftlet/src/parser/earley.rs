@@ -343,13 +343,15 @@ impl Parser for EarleyParser {
             }
 
             if !next_possible_symbols.is_empty() {
-                prev_next_symbol = next_possible_symbols
-                    .iter()
-                    .map(|candidate| candidate.symbol.clone())
-                    .collect();
+                prev_next_symbol.clear();
+                prev_next_symbol.extend(
+                    next_possible_symbols
+                        .iter()
+                        .map(|candidate| candidate.symbol.clone()),
+                );
             }
 
-            next_possible_symbols = Vec::new();
+            next_possible_symbols.clear();
 
             #[cfg(feature = "debug")]
             let mut token_arr = vec![];
@@ -368,7 +370,7 @@ impl Parser for EarleyParser {
                         self.prediction(&mut chart, &mut worklist, next_symbol, i);
                     } else {
                         if let Some(token_match) =
-                            token_iter.peek_token_with_next_symbol(next_symbol.clone())?
+                            token_iter.peek_token_with_next_symbol(&next_symbol)?
                         {
                             let priority = token_iter
                                 .get_terminal_def(&next_symbol)
@@ -393,24 +395,15 @@ impl Parser for EarleyParser {
                 }
             }
 
-            let mut filter_tokens = next_possible_symbols
-                .iter()
-                .collect::<Vec<_>>();
-
-            if filter_tokens.len() > 1 {
-                filter_tokens
-                    .sort_by(|a, b| {
-                        b.priority
-                            .cmp(&a.priority)
-                            .then_with(|| {
-                                b.token_match
-                                    .next_start
-                                    .cmp(&a.token_match.next_start)
-                            })
-                    });
+            if next_possible_symbols.len() > 1 {
+                next_possible_symbols.sort_by(|a, b| {
+                    b.priority
+                        .cmp(&a.priority)
+                        .then_with(|| b.token_match.next_start.cmp(&a.token_match.next_start))
+                });
             }
 
-            if let Some(sym_tk_st) = filter_tokens.first() {
+            if let Some(sym_tk_st) = next_possible_symbols.first() {
                 let tk = sym_tk_st.token_match.token.clone();
                 let state = chart[i].states[sym_tk_st.state_index].clone();
 
@@ -422,7 +415,7 @@ impl Parser for EarleyParser {
                 let priority = sym_tk_st.priority;
                 let next_start = sym_tk_st.token_match.next_start;
 
-                for alternative in filter_tokens.iter().skip(1) {
+                for alternative in next_possible_symbols.iter().skip(1) {
                     if priority != alternative.priority {
                         break;
                     }

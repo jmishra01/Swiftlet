@@ -1,5 +1,5 @@
 use crate::grammar::Rule;
-use crate::lexer::{LexerConf, Symbol, Tokenizer};
+use crate::lexer::{LexerConf, Symbol, TerminalDef, Tokenizer};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -51,8 +51,8 @@ impl ParserConf {
     }
 
     /// Returns all rule expansions from the grammar.
-    pub fn get_all_expansion(&self) -> Vec<Arc<Rule>> {
-        self.all_expansions.clone()
+    pub fn get_all_expansion(&self) -> &[Arc<Rule>] {
+        &self.all_expansions
     }
 
     /// Returns all rules for the specified symbol, if present.
@@ -66,18 +66,34 @@ impl ParserConf {
 pub struct ParserFrontend {
     lexer: Arc<LexerConf>,
     parser: Arc<ParserConf>,
+    ignore_terminals: Arc<[Arc<TerminalDef>]>,
 }
 
 impl ParserFrontend {
     /// Creates a parser frontend with lexer and parser configurations.
     pub(crate) fn new(lexer: Arc<LexerConf>, parser: Arc<ParserConf>) -> Self {
-        Self { lexer, parser }
+        let ignore_terminals = Arc::from(
+            parser
+                .get_ignore_symbols()
+                .iter()
+                .filter_map(|symbol| lexer.get_terminal_def(symbol).cloned())
+                .collect::<Vec<_>>(),
+        );
+
+        Self {
+            lexer,
+            parser,
+            ignore_terminals,
+        }
     }
 
     /// Returns a tokenizer for `text` using cached ignored terminal symbols.
     pub(crate) fn tokenizer(&self, text: &str) -> Tokenizer {
-        self.lexer
-            .tokenize(text, self.parser.get_ignore_symbols().clone())
+        self.lexer.tokenize(
+            text,
+            self.parser.get_ignore_symbols().clone(),
+            self.ignore_terminals.clone(),
+        )
     }
 
     /// Returns the lexer configuration.

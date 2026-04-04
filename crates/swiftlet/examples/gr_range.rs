@@ -7,8 +7,8 @@ fn main() {
     let t1 = Instant::now();
     let text = r#"
         start: expr
-        expr: expr "+" number | number
-        number: number DIGIT | DIGIT
+        expr: expr "+" NUMBER | NUMBER
+        NUMBER: DIGIT+
         DIGIT: "0" .. "9"
         %import WS
         %ignore WS
@@ -20,7 +20,7 @@ fn main() {
     });
 
     let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
-    if let Ok(_res) = text_parser.parse("1 + 2 + 4") {
+    if let Ok(_res) = text_parser.parse("123 + 234 + 456") {
         _res.pretty_print();
     }
     println!("Time took: {:?}", t1.elapsed());

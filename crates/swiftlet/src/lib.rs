@@ -117,10 +117,7 @@ impl Swiftlet {
         let _grammar = load_grammar(&grammar, parser_option.clone())?;
 
         #[cfg(not(feature = "debug"))]
-        let _grammar = match load_grammar(grammar) {
-            Ok(g) => g,
-            Err(err) => return Err(err),
-        };
+        let _grammar = load_grammar(&grammar)?;
 
         Ok(Self {
             grammar_builder: GrammarBuilder::new(_grammar, parser_option.clone()),

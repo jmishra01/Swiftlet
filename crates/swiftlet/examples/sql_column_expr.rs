@@ -31,22 +31,21 @@ const GRAMMAR: &str = r#"
     %ignore WS
     "#;
 
-fn main() {
-
-    let texts = [
-        "SUM(Sales)",
-        "IF_NULL(Sales, 1)",
-        "IF_ZERO(Sales, NULL)",
-        "SUM(Sales > 5)",
-        "SUM(CASE WHEN Sales > 5 THEN 1 ELSE 2 END)",
-        "SUM(Sales) > 20",
-        "SUM(Cost_Price) > SUM(Selling_Price)",
-        "CASE WHEN Sales > 10 THEN 'Greater than 10' ELSE 'Less than 10' END",
-        "CASE WHEN Sales > 10 THEN 'Greater than 10' END",
-        "CASE WHEN SUM(Sales) > 10 THEN 'Aggregate value is greater than 10' ELSE 'Aggregate value is less than or equals to 10' END",
-    ];
+const TEXTS: [&str; 10] = [
+    "SUM(Sales)",
+    "IF_NULL(Sales, 1)",
+    "IF_ZERO(Sales, NULL)",
+    "SUM(Sales > 5)",
+    "SUM(CASE WHEN Sales > 5 THEN 1 ELSE 2 END)",
+    "SUM(Sales) > 20",
+    "SUM(Cost_Price) > SUM(Selling_Price)",
+    "CASE WHEN Sales > 10 THEN 'Greater than 10' ELSE 'Less than 10' END",
+    "CASE WHEN Sales > 10 THEN 'Greater than 10' END",
+    "CASE WHEN SUM(Sales) > 10 THEN 'Aggregate value is greater than 10' ELSE 'Aggregate value is less than or equals to 10' END",
+];
 
 
+fn details() {
     let parser_opt = Arc::new(ParserOption {
         algorithm: Algorithm::CLR,
         ..Default::default()
@@ -56,7 +55,7 @@ fn main() {
         Ok(parser) => {
             println!("Grammar build time: {:?}", grammar_time.elapsed());
             let prefix_text = "Column expr: ";
-            texts.into_iter().for_each(|text| {
+            TEXTS.into_iter().for_each(|text| {
                 println!("{}", "-".repeat(text.len() + prefix_text.len()));
                 println!("{}{}", prefix_text, text);
                 println!("{}", "-".repeat(text.len() + prefix_text.len()));
@@ -72,4 +71,32 @@ fn main() {
             eprintln!("{}", err);
         }
     }
+}
+
+fn perf() {
+    let calculate_instant = |opt: Arc<ParserOption>| {
+        let parser = Swiftlet::from_string(GRAMMAR, opt).unwrap();
+        TEXTS
+            .iter()
+            .map(|text| {
+                let start = Instant::now();
+                let _ = parser.parse(text).unwrap();
+                start.elapsed()
+            }).collect::<Vec<_>>()
+    };
+    // Earley
+    let earley_durations = calculate_instant(Arc::new(ParserOption::default()));
+    let clr_durations = calculate_instant(Arc::new(ParserOption {algorithm: Algorithm::CLR, ..Default::default()}));
+    println!("{}       | {}          | {}", "Earley", "CLR", "Text");
+    println!("{}", "-".repeat(100));
+    for ((text, earley_time), clr_time) in TEXTS.iter().zip(
+        earley_durations.iter()
+    ).zip(clr_durations.iter()) {
+        println!("{:<12?} | {:<12?} | {}", earley_time, clr_time, text);
+    }
+}
+
+fn main() {
+    details();
+    perf();
 }

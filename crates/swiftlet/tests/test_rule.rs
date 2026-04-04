@@ -61,8 +61,7 @@ multi_test!(
     rule_clr_opt,
     rule_earley_opt,
     r#"
-    s: a
-    a: A b?
+    s: A b?
     A: "x"
     b: B
     B: "y"
@@ -77,13 +76,44 @@ multi_test!(
     rule_clr_opt_with_char,
     rule_earley_opt_with_char,
     r#"
-    s: a
-    a: A b?
+    s: A b?
     A: "x"
     b: B
     B: "y"
     "#,
     "xy",
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+multi_test!(
+    rule_clr_context_aware,
+    rule_earley_context_aware,
+    r#"
+    s: "A" r
+    r: /\w/
+    "#,
+    "AB",
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+
+multi_test_multi_input_texts!(
+    rule_clr_next_line,
+    rule_earley_next_line,
+    r#"
+    s: "A" _NL "B"
+    _NL: /(\r|\n|\s)*/
+    "#,
+    [
+        "AB",
+        "A\nB",
+        r#"A
+        B"#
+    ],
     "s",
     Algorithm::CLR,
     Algorithm::Earley

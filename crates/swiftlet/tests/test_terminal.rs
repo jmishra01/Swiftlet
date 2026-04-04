@@ -235,6 +235,21 @@ multi_test!(
     Algorithm::Earley
 );
 
+multi_test!(
+    terminal_clr_imported_terminal_aliases,
+    terminal_earley_imported_terminal_aliases,
+    r#"
+    s: COMMENT _NL
+    COMMENT: SH_COMMENT
+    _NL: NEWLINE
+    %import (SH_COMMENT, NEWLINE)
+    "#,
+    "# service settings\n",
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
 #[test]
 fn parser_option_default_values() {
     let opt = ParserOption::default();

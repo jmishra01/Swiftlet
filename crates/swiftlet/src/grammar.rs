@@ -38,8 +38,8 @@ impl RuleOption {
         self.priority
     }
 
-    pub(crate) fn alias_rule(&self) -> Option<Vec<String>> {
-        self.alias_rule.clone()
+    pub(crate) fn alias_rule(&self) -> Option<&[String]> {
+        self.alias_rule.as_deref()
     }
 }
 

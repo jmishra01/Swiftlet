@@ -2,23 +2,31 @@ use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
 use swiftlet::{ParserOption, Swiftlet};
 fn main() {
-    let text = r#"
+    let grammar = r#"
         a: b
         b: b c | c
         c: "A" c | "B"
         %import WS
         %ignore WS
         "#;
-    let text = r#"
+    let grammar = r#"
     s: e b
     e: "A" b
     b: "B"
     "#;
 
-    let text = r#"
+    let grammar = r#"
     s: a+ -> x
     a: "a"
     "#;
+
+    let grammar = r#"
+    s: "A" _NL "B"
+    _NL: /(\r?\n)+/
+    "#;
+
+    let texts = [r#"A
+B"#, "A\nB"];
 
     let conf = Arc::new(ParserOption {
         algorithm: Algorithm::Earley,
@@ -26,9 +34,9 @@ fn main() {
         start: "s".to_string(),
         ..Default::default()
     });
-    let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
-    // let ast = text_parser.parse("ABBABBBAB");
-    // let ast = text_parser.parse("ABB");
-    let ast = text_parser.parse("aaa");
-    ast.unwrap().pretty_print();
+    let text_parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
+    for text in texts {
+        let ast = text_parser.parse(text);
+        ast.unwrap().pretty_print();
+    }
 }

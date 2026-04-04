@@ -45,14 +45,6 @@ impl ActionTable {
             ActionTable::Accepted => "Accepted".to_string(),
         }
     }
-
-    fn display(&self) -> String {
-        match self {
-            ActionTable::Shift(i) => format!("Shift {{{}}}", i),
-            ActionTable::Reduce(i) => format!("Reduce {{{}}}", i),
-            ActionTable::Accepted => "Accepted".to_string(),
-        }
-    }
 }
 
 /// Represents a CLR item with a lookahead symbol.
@@ -154,7 +146,10 @@ pub(crate) fn setup(
     parser_frontend: Arc<ParserFrontend>,
     start: Arc<Symbol>,
 ) -> (Vec<Arc<Rule>>, SymbolMap) {
-    let mut rules = parser_frontend.get_parser().get_all_expansion();
+    let mut rules = parser_frontend
+        .get_parser()
+        .get_all_expansion()
+        .to_vec();
 
     let mut mapped: SymbolMap = HashMap::new();
 
@@ -376,55 +371,71 @@ impl Clr {
         if lr_table.len() == 1 {
             return Ok(lr_table.first().unwrap());
         }
-        let rules = lr_table
-            .iter()
-            .map(|x| {
-                match x {
-                    ActionTable::Shift(n) => {
-                        (None, *n, x)
-                    },
+        let mut best_action = None;
+        let mut best_priority = 0usize;
+
+        for action in lr_table.iter() {
+            let priority = match action {
+                ActionTable::Reduce(n) => self.rules
+                    .get(*n)
+                    .map(|rule| rule.rule_option.priority()),
+                ActionTable::Accepted => self.rules
+                    .first()
+                    .map(|rule| rule.rule_option.priority()),
+                ActionTable::Shift(_) => None,
+            };
+
+            let Some(priority) = priority else {
+                let conflict = lr_table
+                    .iter()
+                    .map(|x| x.name())
+                    .collect::<Vec<String>>()
+                    .join("-");
+
+                return Err(ParserError::Conflict {
+                    lr_table: lr_table.clone(),
+                    conflict,
+                });
+            };
+
+            for other in lr_table.iter() {
+                if std::ptr::eq(action, other) {
+                    continue;
+                }
+
+                let other_priority = match other {
                     ActionTable::Reduce(n) => {
-                        (self.rules.get(*n), *n, x)
-                    },
-                    ActionTable::Accepted => {
-                        (self.rules.get(0), 0, x)
-                    },
+                        self.rules.get(*n).map(|rule| rule.rule_option.priority())
+                    }
+                    ActionTable::Accepted => self
+                        .rules
+                        .first()
+                        .map(|rule| rule.rule_option.priority()),
+                    ActionTable::Shift(_) => None,
+                };
+
+                if other_priority == Some(priority) {
+                    let conflict = lr_table
+                        .iter()
+                        .map(|x| x.name())
+                        .collect::<Vec<String>>()
+                        .join("-");
+
+                    return Err(ParserError::Conflict {
+                        lr_table: lr_table.clone(),
+                        conflict,
+                    });
                 }
-                // (self.rules.get(n).unwrap(), x)
-            })
-            .collect::<Vec<(Option<&Arc<Rule>>, usize, &ActionTable)>>();
+            }
 
-        let vec_priority = rules
-            .iter()
-            .map(|(r, _, _)| {
-                if let Some(r) = r {
-                    Some(r.rule_option.priority())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<Option<usize>>>();
-
-        let mut hs_priority = HashSet::new();
-
-        for i in vec_priority.iter() {
-            if let Some(i) = i {
-                hs_priority.insert(*i);
+            if best_action.is_none() || priority > best_priority {
+                best_action = Some(action);
+                best_priority = priority;
             }
         }
 
-        if vec_priority.len() == hs_priority.len() {
-            let rule_max = rules
-                .iter()
-                .max_by(|&x1, &x2| {
-                    match (x1.0, x2.0) {
-                        (Some(r1), Some(r2)) => r1.rule_option.priority().cmp(&r2.rule_option.priority()),
-                        _ => std::cmp::Ordering::Equal,
-                    }
-                })
-                .unwrap();
-            // Ok(rules.first().unwrap().2)
-            Ok(rule_max.2)
+        if let Some(best_action) = best_action {
+            Ok(best_action)
         } else {
             let conflict = lr_table
                 .iter()
@@ -541,7 +552,7 @@ impl Clr {
         }
         let mut terminal_defs = symbols
             .iter()
-            .filter_map(|symbol| tokenizer.get_terminal_def(symbol))
+            .filter_map(|symbol| tokenizer.get_terminal_def(symbol).cloned())
             .collect::<Vec<_>>();
         terminal_defs.sort_by(|a, b| {
             b.priority
@@ -558,7 +569,7 @@ impl Clr {
 
         for terminal_def in terminal_defs {
             let sym = terminal_def.get_name();
-            match tokenizer.peek_token_with_next_symbol(sym) {
+            match tokenizer.peek_token_with_next_symbol(&sym) {
                 Ok(lookahead) => {
                     if let Some(lookahead) = lookahead {
                         #[cfg(feature = "debug")]
@@ -668,8 +679,7 @@ pub(crate) fn closure(
         next_symbols.insert(next_symbol.clone());
 
         if !next_symbol.is_terminal()
-            && let Some(productions) = lr_parser.mapped.get(next_symbol)
-        {
+            && let Some(productions) = lr_parser.mapped.get(next_symbol) {
             if let Some(v) = item.rule.expansion[item.dot + 1..].first() {
                 let lookahead = lr_parser.get_first(v).unwrap();
                 for (index, rule) in productions.iter() {

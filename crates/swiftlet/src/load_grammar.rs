@@ -135,9 +135,7 @@ pub fn get_parser() -> Arc<ParserFrontend> {
         RULES.clone(),
         Vec::from(["WS".to_string(), "COMMENT".to_string()]),
     ));
-    let lexer_conf = Arc::new(LexerConf {
-        terminals: TERMINALS.clone(),
-    });
+    let lexer_conf = Arc::new(LexerConf::new(TERMINALS.to_vec()));
 
     Arc::new(ParserFrontend::new(lexer_conf, parser_conf))
 }
@@ -160,8 +158,26 @@ macro_rules! impl_load_grammar {
             )*
 
             let common_terminals = get_common_terminals();
+            let imported_terminals = tree
+                .get_child_tree("import")
+                .map(|imports| {
+                    imports
+                        .iter()
+                        .flat_map(|import| fetch_terminals(import))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
             let mut terminals = if let Some(terminals) = tree.get_child_tree("term") {
-                let mut terminal_compiler = TerminalCompiler::new(terminals);
+                let known_terminals = imported_terminals
+                    .iter()
+                    .filter_map(|name| {
+                        common_terminals
+                            .get(name)
+                            .map(|terminal| (name.clone(), terminal.clone()))
+                    })
+                    .collect::<HashMap<_, _>>();
+                let mut terminal_compiler = TerminalCompiler::new(terminals, known_terminals);
                 terminal_compiler.compile();
                 terminal_compiler.get_terminals()
             } else {
@@ -194,13 +210,7 @@ macro_rules! impl_load_grammar {
             };
             ignores.iter().for_each(&mut update_terminals);
 
-            if let Some(imports) = tree.get_child_tree("import") {
-                imports
-                .iter()
-                .map(|ignore| fetch_terminals(ignore))
-                .flatten()
-                .for_each(|arg0: String| update_terminals(&arg0));
-            }
+            imported_terminals.iter().for_each(&mut update_terminals);
             let Some(rules) = tree.get_child_tree("rule") else {
                 return Err(ParserError::GrammarParseError(
                     "grammar does not contain any rule definitions".to_string(),

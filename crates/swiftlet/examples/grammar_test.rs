@@ -14,7 +14,7 @@ fn main() {
         ..Default::default()});
 
     let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
-    /// [wx]z?yz?y[wx]z?y
+    // [wx]z?yz?y[wx]z?y
     let text = "xyzyxy";
     match parser.parse(text) {
         Ok(parsed) => parsed.pretty_print(),

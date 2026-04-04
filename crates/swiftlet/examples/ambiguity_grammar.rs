@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{Ambiguity, ParserOption, Swiftlet};
 
 
 /// TODO: Some time below grammar failed
@@ -18,7 +18,8 @@ fn main() {
 
     let conf = Arc::new(ParserOption {
         start: "e".to_string(),
-        algorithm: Algorithm::CLR,
+        algorithm: Algorithm::Earley,
+        ambiguity: Ambiguity::Explicit,
         debug: true,
         ..Default::default()
     });
