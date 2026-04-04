@@ -1,10 +1,8 @@
 # Changelog
 
-This changelog is derived from git tags and the commits since the latest tag.
+### v0.2.0 - 2026-04-04
 
-### Recent Changes
-
-Changes in `v0.1.5..recent-changes`
+Changes in `v0.1.5..v0.2.0`
 
 ### Added
 - **Refactored Rust parser construction to use `Swiftlet::from_str(...)` / `Swiftlet::from_file(...)` plus `grammar.parser(...)` instead of direct string/file parser constructors.**

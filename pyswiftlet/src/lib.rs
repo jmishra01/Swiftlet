@@ -13,7 +13,7 @@ fn parse_algorithm(value: &str) -> PyResult<RustAlgorithm> {
         "earley" => Ok(RustAlgorithm::Earley),
         "clr" => Ok(RustAlgorithm::CLR),
         _ => Err(PyValueError::new_err(format!(
-            "invalid algorithm '{value}', expected 'earley', 'clr', or 'lalr'"
+            "invalid algorithm '{value}', expected 'earley', 'clr'"
         ))),
     }
 }
