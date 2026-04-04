@@ -1,26 +1,21 @@
-use crate::ast::AST;
-use crate::error::ParserError;
-use crate::grammar::{Rule, RuleOption};
+use crate::ast::Ast;
+use crate::error::{GrammarError, SwiftletError};
+use crate::grammar::{Rule, RuleMeta};
 use crate::lexer::{RegexFlag, Symbol, TerminalDef, get_symbol};
 use crate::terminal_def;
 use fancy_regex::Regex;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
-static ESCAPE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(\p{P})").unwrap()
-});
+static ESCAPE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\p{P})").unwrap());
 
 pub type OptVecStr = Option<Vec<String>>;
 pub type OptStr = Option<String>;
 
-pub(crate) fn fetch_terminals(ast: &AST) -> Vec<String> {
+pub(crate) fn fetch_terminals(ast: &Ast) -> Vec<String> {
     match ast {
-        AST::Tree(_, childs) => childs
-            .iter()
-            .flat_map(fetch_terminals)
-            .collect::<Vec<_>>(),
-        AST::Token(token) => {
+        Ast::Tree(_, childs) => childs.iter().flat_map(fetch_terminals).collect::<Vec<_>>(),
+        Ast::Token(token) => {
             let word = token.word();
             vec![if word.starts_with("\"") & word.ends_with("\"") {
                 word[1..word.len() - 1].to_string()
@@ -32,7 +27,7 @@ pub(crate) fn fetch_terminals(ast: &AST) -> Vec<String> {
 }
 
 pub struct TerminalCompiler<'a> {
-    terminals: Vec<&'a AST>,
+    terminals: Vec<&'a Ast>,
     map: HashMap<String, Arc<TerminalDef>>,
     local_terminal_names: Vec<String>,
     index: usize,
@@ -40,7 +35,10 @@ pub struct TerminalCompiler<'a> {
 }
 
 impl<'a> TerminalCompiler<'a> {
-    pub fn new(terminals: Vec<&'a AST>, known_terminals: HashMap<String, Arc<TerminalDef>>) -> Self {
+    pub fn new(
+        terminals: Vec<&'a Ast>,
+        known_terminals: HashMap<String, Arc<TerminalDef>>,
+    ) -> Self {
         let terminal_len = terminals.len();
         Self {
             terminals,
@@ -66,7 +64,7 @@ impl<'a> TerminalCompiler<'a> {
         }
     }
 
-    fn _string(&mut self, child: &[AST]) -> OptStr {
+    fn transform_string(&mut self, child: &[Ast]) -> OptStr {
         let first = child.first().unwrap();
         if let Some(w) = self._transform(first) {
             if w.ends_with("\"i") {
@@ -81,7 +79,7 @@ impl<'a> TerminalCompiler<'a> {
         None
     }
 
-    fn _regex(&mut self, child: &[AST]) -> OptStr {
+    fn transform_regex(&mut self, child: &[Ast]) -> OptStr {
         let first = child.first().unwrap();
         let pattern = self._transform(first)?;
         let mut pattern = pattern.as_str();
@@ -110,19 +108,19 @@ impl<'a> TerminalCompiler<'a> {
         Some(pattern)
     }
 
-    fn _maybe(&mut self, child: &[AST]) -> OptStr {
+    fn transform_maybe(&mut self, child: &[Ast]) -> OptStr {
         let first = child.first().unwrap();
         let maybe = self._transform(first)?;
         Some(format!("[{}]", maybe))
     }
 
-    fn _op_expansion(&mut self, child: &[AST]) -> OptStr {
+    fn transform_op_expansion(&mut self, child: &[Ast]) -> OptStr {
         let first = child.first().unwrap();
         let second = child.last().unwrap();
         let sign = self._transform(second)?;
 
         match first {
-            AST::Tree(name, _) => match name.as_str() {
+            Ast::Tree(name, _) => match name.as_str() {
                 "terminal" => {
                     let terminal = self._transform(first)?;
                     let is_contains = self.map.contains_key(&terminal);
@@ -144,47 +142,49 @@ impl<'a> TerminalCompiler<'a> {
         }
     }
 
-    fn _or_expansion(&mut self, child: &[AST]) -> OptStr {
-        let val = self._resolve_internal_terminal(child)?;
+    fn transform_or_expansion(&mut self, child: &[Ast]) -> OptStr {
+        let val = self.transform_resolve_internal_terminal(child)?;
         if val.len() > 1 {
             return Some(format!("({})", val.join("|")));
         }
         Some(val.first().unwrap().to_string())
     }
 
-    fn _expansion(&mut self, child: &[AST]) -> OptStr {
-        match self._resolve_internal_terminal(child) {
+    fn transform_expansion(&mut self, child: &[Ast]) -> OptStr {
+        match self.transform_resolve_internal_terminal(child) {
             Some(arr) => Some(arr.join("")),
             None => None,
         }
     }
 
-    fn _resolve_internal_terminal(&mut self, child: &[AST]) -> OptVecStr {
+    fn transform_resolve_internal_terminal(&mut self, child: &[Ast]) -> OptVecStr {
         Some(
             child
                 .iter()
                 .filter_map(|c| match c {
-                    AST::Token(_) => None,
-                    AST::Tree(name, childs) => match name.as_str() {
+                    Ast::Token(_) => None,
+                    Ast::Tree(name, childs) => match name.as_str() {
                         "terminal" => {
-                            let child_terminal_name = self._terminal(childs).unwrap();
+                            let child_terminal_name = self.transform_terminal(childs).unwrap();
                             if !self.map.contains_key(&child_terminal_name) {
                                 for _index in (self.index + 1)..self.terminal_len {
                                     let term = self.terminals[_index];
                                     match term {
-                                        AST::Tree(_, term_children) => {
+                                        Ast::Tree(_, term_children) => {
                                             let &_first =
-                                                term.get_child_tree("terminal")?.first()?;
+                                                term.trees_named("terminal")?.first()?;
                                             let token_word = self._transform(_first)?;
                                             if token_word.cmp(&child_terminal_name).is_eq() {
-                                                self._term(term_children);
+                                                self.transform_term(term_children);
                                             }
                                         }
                                         _ => unreachable!(),
                                     }
                                 }
                             }
-                            self.map.get(&child_terminal_name).map(|term| term.value.clone())
+                            self.map
+                                .get(&child_terminal_name)
+                                .map(|term| term.value.clone())
                         }
                         _ => self._transform(c),
                     },
@@ -193,7 +193,7 @@ impl<'a> TerminalCompiler<'a> {
         )
     }
 
-    fn _term(&mut self, child: &[AST]) -> OptStr {
+    fn transform_term(&mut self, child: &[Ast]) -> OptStr {
         let first_child = child.first().unwrap();
         let name_term = self._transform(first_child)?;
         if self.map.contains_key(&name_term) {
@@ -214,11 +214,11 @@ impl<'a> TerminalCompiler<'a> {
         None
     }
 
-    fn _terminal(&mut self, child: &[AST]) -> OptStr {
+    fn transform_terminal(&mut self, child: &[Ast]) -> OptStr {
         self._transform(child.first().unwrap())
     }
 
-    fn _range(&mut self, child: &[AST]) -> OptStr {
+    fn transform_range(&mut self, child: &[Ast]) -> OptStr {
         let first = child.first().unwrap();
         let first_range = self._transform(first)?;
         let first_range = first_range[1..first_range.len() - 1].to_owned();
@@ -230,24 +230,24 @@ impl<'a> TerminalCompiler<'a> {
         Some(format!("[{}-{}]", first_range, second_range))
     }
 
-    fn _priority(&mut self, child: &[AST]) -> OptStr {
+    fn transform_priority(&mut self, child: &[Ast]) -> OptStr {
         self._transform(child.last().unwrap())
     }
 
-    fn _transform(&mut self, ast: &AST) -> OptStr {
+    fn _transform(&mut self, ast: &Ast) -> OptStr {
         match ast {
-            AST::Token(token) => Some(token.word().to_string()),
-            AST::Tree(name, children) => match name.as_str() {
-                "term" => self._term(children),
-                "string" => self._string(children),
-                "expansion" => self._expansion(children),
-                "or_expansion" => self._or_expansion(children),
-                "op_expansion" => self._op_expansion(children),
-                "terminal" => self._terminal(children),
-                "regex" => self._regex(children),
-                "maybe" => self._maybe(children),
-                "range" => self._range(children),
-                "priority" => self._priority(children),
+            Ast::Token(token) => Some(token.word().to_string()),
+            Ast::Tree(name, children) => match name.as_str() {
+                "term" => self.transform_term(children),
+                "string" => self.transform_string(children),
+                "expansion" => self.transform_expansion(children),
+                "or_expansion" => self.transform_or_expansion(children),
+                "op_expansion" => self.transform_op_expansion(children),
+                "terminal" => self.transform_terminal(children),
+                "regex" => self.transform_regex(children),
+                "maybe" => self.transform_maybe(children),
+                "range" => self.transform_range(children),
+                "priority" => self.transform_priority(children),
                 _ => panic!("{} tree not found.", name),
             },
         }
@@ -255,9 +255,9 @@ impl<'a> TerminalCompiler<'a> {
 }
 
 /// Normalizes origin symbol and derives rule options from name and priority.
-fn origin_apply(name: &str, priority: usize, alias_rule: OptVecStr) -> (String, Arc<RuleOption>) {
+fn origin_apply(name: &str, priority: usize, alias_rule: OptVecStr) -> (String, Arc<RuleMeta>) {
     let is_expand = name.starts_with("?");
-    let rule_option = Arc::new(RuleOption::new(is_expand, priority, alias_rule));
+    let rule_option = Arc::new(RuleMeta::new(is_expand, priority, alias_rule));
     let clean_name = if is_expand {
         name.strip_prefix("?").unwrap().to_string()
     } else {
@@ -287,12 +287,14 @@ impl RuleCompiler {
     }
 
     /// Returns transformed grammar and validates non-terminal references.
-    pub fn get_grammar(&self) -> Result<HashMap<Arc<Symbol>, Vec<Arc<Rule>>>, ParserError> {
+    pub fn get_grammar(&self) -> Result<HashMap<Arc<Symbol>, Vec<Arc<Rule>>>, SwiftletError> {
         for v in self.rules.values() {
             for r in v.iter() {
                 for e in r.expansion.iter() {
                     if !e.is_terminal() && !self.rules.contains_key(e) {
-                        return Err(ParserError::RuleProductionNotFound(e.as_str().to_string()));
+                        return Err(
+                            GrammarError::RuleProductionNotFound(e.as_str().to_string()).into()
+                        );
                     }
                 }
             }
@@ -308,13 +310,13 @@ impl RuleCompiler {
 
     #[inline]
     /// Transforms a terminal or non-terminal leaf node.
-    fn terminal_non_terminal(&mut self, tree: &[AST]) -> OptVecStr {
+    fn terminal_non_terminal(&mut self, tree: &[Ast]) -> OptVecStr {
         self._transform(&tree[0])
     }
 
     #[inline]
     /// Expands concatenated expressions into full production combinations.
-    fn expansions(&mut self, tree: &[AST]) -> OptVecStr {
+    fn expansions(&mut self, tree: &[Ast]) -> OptVecStr {
         if tree.len() == 1 {
             let ret = self._transform(&tree[0]);
             return ret;
@@ -338,7 +340,7 @@ impl RuleCompiler {
 
     #[inline]
     /// Transforms OR alternatives and memoizes generated helper rules.
-    fn or_expansion(&mut self, tree: &[AST]) -> OptVecStr {
+    fn or_expansion(&mut self, tree: &[Ast]) -> OptVecStr {
         if tree.len() == 1 {
             return self._transform(tree.first().unwrap());
         }
@@ -364,10 +366,10 @@ impl RuleCompiler {
 
     #[inline]
     /// Expands postfix operators (`?`, `+`, `*`) into helper productions.
-    fn op_expansion(&mut self, tree: &[AST]) -> OptVecStr {
+    fn op_expansion(&mut self, tree: &[Ast]) -> OptVecStr {
         let second = self._transform(&tree[1]).unwrap()[0].clone();
 
-        if let AST::Tree(name, _) = &tree[0]
+        if let Ast::Tree(name, _) = &tree[0]
             && name.cmp(&"terminal".to_string()).is_eq()
         {
             let v_result = self._transform(&tree[0]).unwrap()[0].clone();
@@ -440,16 +442,16 @@ impl RuleCompiler {
 
     #[inline]
     /// Transforms a rule declaration node.
-    fn rule(&mut self, tree: &[AST]) -> OptVecStr {
+    fn rule(&mut self, tree: &[Ast]) -> OptVecStr {
         let rule_name = self._transform(&tree[0]).unwrap();
         let child = tree.last().unwrap();
 
         let mut alias_rules = vec![];
 
-        if let Some(alias_trees) = child.get_child_tree("alias") {
+        if let Some(alias_trees) = child.trees_named("alias") {
             for alias_tree in alias_trees {
-                if let Some(AST::Tree(_, alias_childs)) = alias_tree.get_last_child()
-                    && let Some(AST::Token(alias_child)) = alias_childs.last()
+                if let Some(Ast::Tree(_, alias_childs)) = alias_tree.last_child()
+                    && let Some(Ast::Token(alias_child)) = alias_childs.last()
                 {
                     alias_rules.push(alias_child.word().to_string());
                 }
@@ -471,7 +473,7 @@ impl RuleCompiler {
 
     #[inline]
     /// Transforms a string range node into a character class regex.
-    fn range(&mut self, tree: &[AST]) -> OptVecStr {
+    fn range(&mut self, tree: &[Ast]) -> OptVecStr {
         let first = self._transform(&tree[0]).unwrap();
         let second = self._transform(&tree[1]).unwrap();
 
@@ -493,7 +495,7 @@ impl RuleCompiler {
 
     #[inline]
     /// Transforms a string literal into a synthetic terminal.
-    fn string(&mut self, tree: &[AST]) -> OptVecStr {
+    fn string(&mut self, tree: &[Ast]) -> OptVecStr {
         let word = self._transform(&tree[0]).unwrap();
         let word = word[0].strip_prefix("\"")?;
         let is_case_insensitive = word.ends_with("\"i");
@@ -524,7 +526,7 @@ impl RuleCompiler {
 
     #[inline]
     /// Transforms parenthesized expressions into a helper rule.
-    fn pars(&mut self, tree: &[AST]) -> OptVecStr {
+    fn pars(&mut self, tree: &[Ast]) -> OptVecStr {
         let mut v_result: Vec<String> = Vec::new();
         let mut name = "_".to_string();
 
@@ -543,7 +545,7 @@ impl RuleCompiler {
 
     #[inline]
     /// Transforms optional expression into `(expr | empty)`.
-    fn maybe(&mut self, tree: &[AST]) -> OptVecStr {
+    fn maybe(&mut self, tree: &[Ast]) -> OptVecStr {
         let v_result = tree
             .iter()
             .filter_map(|x| self._transform(x))
@@ -556,12 +558,12 @@ impl RuleCompiler {
     }
 
     /// Returns parsed priority token.
-    fn priority(&mut self, tree: &[AST]) -> OptVecStr {
+    fn priority(&mut self, tree: &[Ast]) -> OptVecStr {
         self._transform(&tree[0])
     }
 
     /// Transforms alias production and injects alias rule.
-    fn alias(&mut self, tree: &[AST]) -> OptVecStr {
+    fn alias(&mut self, tree: &[Ast]) -> OptVecStr {
         let last_node = tree.last().unwrap();
         let rule = self._transform(last_node).unwrap();
 
@@ -580,7 +582,7 @@ impl RuleCompiler {
     }
 
     /// Transforms regex literal node into a synthetic regex terminal.
-    fn regex(&mut self, tree: &[AST]) -> OptVecStr {
+    fn regex(&mut self, tree: &[Ast]) -> OptVecStr {
         let node = tree.last().unwrap();
         let rule = self._transform(node).unwrap();
         let mut pattern = rule.first().unwrap().as_str();
@@ -611,7 +613,7 @@ impl RuleCompiler {
         Some(vec![terminal_name])
     }
 
-    pub fn compile(&mut self, tree: Vec<&AST>) -> OptVecStr {
+    pub fn compile(&mut self, tree: Vec<&Ast>) -> OptVecStr {
         let len = tree.len();
         for i in 0..len {
             let rule = tree.get(i).unwrap();
@@ -622,10 +624,10 @@ impl RuleCompiler {
     }
 
     /// Dispatches AST transformation by node type.
-    fn _transform(&mut self, ast: &AST) -> OptVecStr {
+    fn _transform(&mut self, ast: &Ast) -> OptVecStr {
         match ast {
-            AST::Token(token) => Some(vec![token.word().to_string()]),
-            AST::Tree(name, tree) => match name.as_str() {
+            Ast::Token(token) => Some(vec![token.word().to_string()]),
+            Ast::Tree(name, tree) => match name.as_str() {
                 "terminal" | "non_terminal" => self.terminal_non_terminal(tree),
                 "expansions" | "expansion" => self.expansions(tree),
                 "or_expansion" => self.or_expansion(tree),

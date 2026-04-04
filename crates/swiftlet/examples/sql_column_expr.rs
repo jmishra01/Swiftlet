@@ -44,14 +44,13 @@ const TEXTS: [&str; 10] = [
     "CASE WHEN SUM(Sales) > 10 THEN 'Aggregate value is greater than 10' ELSE 'Aggregate value is less than or equals to 10' END",
 ];
 
-
 fn details() {
-    let parser_opt = Arc::new(ParserOption {
+    let parser_opt = Arc::new(ParserConfig {
         algorithm: Algorithm::CLR,
         ..Default::default()
     });
     let grammar_time = Instant::now();
-    match Swiftlet::from_string(GRAMMAR, parser_opt) {
+    match Swiftlet::from_str(GRAMMAR).map(|grammar| grammar.parser(parser_opt)) {
         Ok(parser) => {
             println!("Grammar build time: {:?}", grammar_time.elapsed());
             let prefix_text = "Column expr: ";
@@ -74,24 +73,32 @@ fn details() {
 }
 
 fn perf() {
-    let calculate_instant = |opt: Arc<ParserOption>| {
-        let parser = Swiftlet::from_string(GRAMMAR, opt).unwrap();
+    let calculate_instant = |opt: Arc<ParserConfig>| {
+        let parser = Swiftlet::from_str(GRAMMAR)
+            .map(|grammar| grammar.parser(opt))
+            .unwrap();
         TEXTS
             .iter()
             .map(|text| {
                 let start = Instant::now();
                 let _ = parser.parse(text).unwrap();
                 start.elapsed()
-            }).collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
     };
     // Earley
-    let earley_durations = calculate_instant(Arc::new(ParserOption::default()));
-    let clr_durations = calculate_instant(Arc::new(ParserOption {algorithm: Algorithm::CLR, ..Default::default()}));
+    let earley_durations = calculate_instant(Arc::new(ParserConfig::default()));
+    let clr_durations = calculate_instant(Arc::new(ParserConfig {
+        algorithm: Algorithm::CLR,
+        ..Default::default()
+    }));
     println!("{}       | {}          | {}", "Earley", "CLR", "Text");
     println!("{}", "-".repeat(100));
-    for ((text, earley_time), clr_time) in TEXTS.iter().zip(
-        earley_durations.iter()
-    ).zip(clr_durations.iter()) {
+    for ((text, earley_time), clr_time) in TEXTS
+        .iter()
+        .zip(earley_durations.iter())
+        .zip(clr_durations.iter())
+    {
         println!("{:<12?} | {:<12?} | {}", earley_time, clr_time, text);
     }
 }

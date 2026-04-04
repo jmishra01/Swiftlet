@@ -1,11 +1,11 @@
-use crate::ast::AST;
-use crate::error::ParserError;
-use crate::grammar::{Rule, RuleOption};
+use crate::ast::Ast;
+use crate::error::{LexerError, ParseError, SwiftletError};
+use crate::grammar::{Rule, RuleMeta};
 use crate::lexer::{Symbol, Token, TokenMatch, Tokenizer};
-use crate::parser::Parser;
+use crate::parser::ParserBackend;
 use crate::parser::utils::dot_state;
-use crate::parser_frontends::ParserFrontend;
-use crate::{Ambiguity, ParserOption, non_terms};
+use crate::parser_frontends::GrammarRuntime;
+use crate::{Ambiguity, ParserConfig, non_terms};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::iter::Iterator;
@@ -13,12 +13,12 @@ use std::sync::Arc;
 
 /// Represents a single Earley item together with accumulated children.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct State {
+pub struct EarleyItem {
     pub rule: Arc<Rule>,
     pub dot: usize,
     pub start: usize,
     pub end: usize,
-    pub children: Vec<AST>,
+    pub children: Vec<Ast>,
 }
 
 pub(crate) struct SymbolTokenState {
@@ -40,14 +40,14 @@ struct StateCore {
 /// Stores all Earley states generated for a single chart position.
 #[derive(Clone, Default)]
 struct ChartColumn {
-    states: Vec<Arc<State>>,
-    exact_index: HashMap<StateCore, Vec<Arc<State>>>,
-    pending_by_symbol: HashMap<Arc<Symbol>, Vec<Arc<State>>>,
+    states: Vec<Arc<EarleyItem>>,
+    exact_index: HashMap<StateCore, Vec<Arc<EarleyItem>>>,
+    pending_by_symbol: HashMap<Arc<Symbol>, Vec<Arc<EarleyItem>>>,
 }
 
-impl State {
+impl EarleyItem {
     /// Creates an Earley state.
-    pub fn new(rule: Arc<Rule>, dot: usize, start: usize, end: usize, children: Vec<AST>) -> Self {
+    pub fn new(rule: Arc<Rule>, dot: usize, start: usize, end: usize, children: Vec<Ast>) -> Self {
         Self {
             rule,
             dot,
@@ -73,7 +73,7 @@ impl State {
 
 impl ChartColumn {
     /// Inserts a state if it has not already been seen in this column.
-    fn insert(&mut self, state: Arc<State>) -> Option<usize> {
+    fn insert(&mut self, state: Arc<EarleyItem>) -> Option<usize> {
         let core = StateCore {
             rule: state.rule.clone(),
             dot: state.dot,
@@ -107,7 +107,7 @@ impl ChartColumn {
     }
 }
 
-impl Display for State {
+impl Display for EarleyItem {
     /// Formats state as `A -> alpha ● beta`.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let (rule, before_dot, after_dot) = dot_state(&self.rule, self.dot);
@@ -117,13 +117,13 @@ impl Display for State {
 
 /// Earley parser implementation used for general context-free grammars.
 pub struct EarleyParser {
-    parser_frontend: Arc<ParserFrontend>,
-    parser_config: Arc<ParserOption>,
+    parser_frontend: Arc<GrammarRuntime>,
+    parser_config: Arc<ParserConfig>,
 }
 
 impl EarleyParser {
     /// Creates an Earley parser.
-    pub fn new(parser_frontend: Arc<ParserFrontend>, parser_config: Arc<ParserOption>) -> Self {
+    pub fn new(parser_frontend: Arc<GrammarRuntime>, parser_config: Arc<ParserConfig>) -> Self {
         Self {
             parser_frontend,
             parser_config,
@@ -145,7 +145,7 @@ impl EarleyParser {
             .get_parser()
             .next_expansion(&next_symbol)
         {
-            pending_states.push(Arc::new(State {
+            pending_states.push(Arc::new(EarleyItem {
                 rule: rule.clone(),
                 dot: 0,
                 start: i,
@@ -167,7 +167,7 @@ impl EarleyParser {
         &self,
         chart: &mut [ChartColumn],
         worklist: &mut Vec<usize>,
-        state: Arc<State>,
+        state: Arc<EarleyItem>,
         i: usize,
     ) {
         let candidates = chart[state.start]
@@ -187,19 +187,19 @@ impl EarleyParser {
             } else if state.children.len() == 1 && state.rule.is_expand() {
                 child.push(state.children[0].clone());
             } else if state.children.len() == 1
-                && let Some(AST::Tree(name, _)) = state.children.first()
+                && let Some(Ast::Tree(name, _)) = state.children.first()
                 && let Some(alias_rule) = state.rule.rule_option.alias_rule()
                 && alias_rule.contains(name)
             {
                 child.push(state.children[0].clone());
             } else {
-                child.push(AST::Tree(
+                child.push(Ast::Tree(
                     state.rule.origin.as_ref().as_str().to_string(),
                     state.children.clone(),
                 ));
             }
 
-            pending_states.push(Arc::new(State {
+            pending_states.push(Arc::new(EarleyItem {
                 rule: x1.rule.clone(),
                 dot: x1.dot + 1,
                 start: x1.start,
@@ -217,33 +217,27 @@ impl EarleyParser {
 
     /// Earley scan step: consumes a matching terminal token into the next chart column.
     #[inline(always)]
-    fn scan(
-        &self,
-        chart: &mut Vec<ChartColumn>,
-        token: Arc<Token>,
-        state: &Arc<State>,
-        i: usize,
-    ) {
-            let mut child = Vec::with_capacity(state.children.len() + 1);
-            child.extend(state.children.iter().cloned());
+    fn scan(&self, chart: &mut Vec<ChartColumn>, token: Arc<Token>, state: &Arc<EarleyItem>, i: usize) {
+        let mut child = Vec::with_capacity(state.children.len() + 1);
+        child.extend(state.children.iter().cloned());
 
-            if !token.terminal.starts_with("_") || token.terminal.starts_with("__") {
-                child.push(AST::Token(token.clone()));
-            }
+        if !token.terminal.starts_with("_") || token.terminal.starts_with("__") {
+            child.push(Ast::Token(token.clone()));
+        }
 
-            let next_state = Arc::new(State {
-                rule: state.rule.clone(),
-                dot: state.dot + 1,
-                start: state.start,
-                end: i + 1,
-                children: child,
-            });
+        let next_state = Arc::new(EarleyItem {
+            rule: state.rule.clone(),
+            dot: state.dot + 1,
+            start: state.start,
+            end: i + 1,
+            children: child,
+        });
 
-            if chart.get(i + 1).is_none() {
-                chart.push(ChartColumn::default());
-            }
+        if chart.get(i + 1).is_none() {
+            chart.push(ChartColumn::default());
+        }
 
-            let _ = chart[i + 1].insert(next_state);
+        let _ = chart[i + 1].insert(next_state);
     }
 
     fn finalize_basic_parse(
@@ -251,11 +245,12 @@ impl EarleyParser {
         chart: &[ChartColumn],
         tokenizer: &mut Tokenizer,
         expected_token: &[Arc<Symbol>],
-    ) -> Result<AST, ParserError> {
+    ) -> Result<Ast, SwiftletError> {
         let Some(last_column) = chart.last() else {
-            return Err(ParserError::FailedToParse(
+            return Err(ParseError::FailedToParse(
                 "earley parser produced no chart columns".to_string(),
-            ));
+            )
+            .into());
         };
 
         let mut complete_parsed_tree = last_column
@@ -275,56 +270,58 @@ impl EarleyParser {
                 let mut children = Vec::new();
                 for states in complete_parsed_tree {
                     let Some(child) = states.children.first() else {
-                        return Err(ParserError::FailedToParse(
+                        return Err(ParseError::FailedToParse(
                             "completed parse state did not contain a child AST".to_string(),
-                        ));
+                        )
+                        .into());
                     };
                     children.push(child.clone());
                 }
 
                 if !children.is_empty() {
-                    return Ok(AST::Tree("_ambiguity".to_string(), children));
+                    return Ok(Ast::Tree("_ambiguity".to_string(), children));
                 }
             }
         }
 
         let exp = expected_token
-                     .iter()
-                     .map(|x| {
-                         let t = tokenizer.get_terminal_def(x).unwrap();
-                         t.value.clone()
-                     })
-                     .collect::<Vec<_>>();
+            .iter()
+            .map(|x| {
+                let t = tokenizer.get_terminal_def(x).unwrap();
+                t.value.clone()
+            })
+            .collect::<Vec<_>>();
         let (line, column) = tokenizer.get_line_column();
-        Err(ParserError::TokenizationError {
+        Err(LexerError::Tokenization {
             location: tokenizer.get_start(),
             line,
             column,
             expected: exp,
             text: tokenizer.get_text().to_string(),
             caret: format!("{}^", " ".repeat(column - 1)),
-        })
+        }
+        .into())
     }
 }
 
-impl Parser for EarleyParser {
+impl ParserBackend for EarleyParser {
     /// Returns parser frontend.
-    fn get_parser_frontend(&self) -> Arc<ParserFrontend> {
+    fn get_parser_frontend(&self) -> Arc<GrammarRuntime> {
         self.parser_frontend.clone()
     }
 
     /// Runs Earley parsing and returns an AST according to ambiguity strategy.
-    fn parse(&self, token_iter: &mut Tokenizer) -> Result<AST, ParserError> {
+    fn parse(&self, token_iter: &mut Tokenizer) -> Result<Ast, SwiftletError> {
         let mut chart = vec![ChartColumn::default()];
 
         let start_rule = Arc::new(Rule::new(
             Arc::new(Symbol::NonTerminal("gamma".to_string())),
             vec![non_terms!(self.parser_config.start)],
-            Arc::new(RuleOption::default()),
+            Arc::new(RuleMeta::default()),
             0,
         ));
 
-        let _ = chart[0].insert(Arc::new(State::new(start_rule, 0, 0, 0, vec![])));
+        let _ = chart[0].insert(Arc::new(EarleyItem::new(start_rule, 0, 0, 0, vec![])));
         let mut j = 1;
         let mut i = 0;
 
@@ -440,7 +437,7 @@ impl Parser for EarleyParser {
                         .filter(|x| x.is_some())
                         .map(|x| match x {
                             Some(x) => x.to_string(),
-                            None => "None".to_string()
+                            None => "None".to_string(),
                         })
                         .collect::<Vec<String>>()
                         .join(", ")
@@ -475,12 +472,12 @@ mod tests {
     }
 
     #[cfg(feature = "debug")]
-    fn test_frontend(grammar: &str, parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
+    fn test_frontend(grammar: &str, parser_opt: Arc<ParserConfig>) -> Arc<GrammarRuntime> {
         load_grammar(&normalize_grammar(grammar), parser_opt).expect("failed to load grammar")
     }
 
     #[cfg(not(feature = "debug"))]
-    fn test_frontend(grammar: &str, _parser_opt: Arc<ParserOption>) -> Arc<ParserFrontend> {
+    fn test_frontend(grammar: &str, _parser_opt: Arc<ParserConfig>) -> Arc<GrammarRuntime> {
         load_grammar(&normalize_grammar(grammar)).expect("failed to load grammar")
     }
 
@@ -492,11 +489,11 @@ mod tests {
                 Arc::new(Symbol::NonTerminal("expr".to_string())),
                 Arc::new(Symbol::Terminal("INT".to_string())),
             ],
-            Arc::new(RuleOption::default()),
+            Arc::new(RuleMeta::default()),
             0,
         ));
-        let s0 = State::new(rule.clone(), 0, 0, 0, vec![]);
-        let s2 = State::new(rule, 2, 0, 1, vec![]);
+        let s0 = EarleyItem::new(rule.clone(), 0, 0, 0, vec![]);
+        let s2 = EarleyItem::new(rule, 2, 0, 1, vec![]);
 
         assert!(!s0.is_complete());
         assert_eq!(s0.next_symbol().unwrap().as_ref().as_str(), "expr");
@@ -511,22 +508,22 @@ mod tests {
         start: a
         a: "x" | "x"
         "#;
-        let parser_opt = Arc::new(ParserOption::default());
+        let parser_opt = Arc::new(ParserConfig::default());
         let pf = test_frontend(grammar, parser_opt.clone());
         let earley = EarleyParser::new(pf.clone(), parser_opt);
         let mut tk = pf.tokenizer("x");
         assert!(earley.parse(&mut tk).is_ok());
 
-        let explicit_opt = Arc::new(ParserOption {
+        let explicit_opt = Arc::new(ParserConfig {
             algorithm: Algorithm::Earley,
             ambiguity: Ambiguity::Explicit,
-            ..ParserOption::default()
+            ..ParserConfig::default()
         });
         let explicit_pf = test_frontend(grammar, explicit_opt.clone());
         let explicit = EarleyParser::new(explicit_pf.clone(), explicit_opt);
         let mut tk = explicit_pf.tokenizer("x");
         let ast = explicit.parse(&mut tk).unwrap();
-        assert_eq!(ast.get_tree_name(), Some(&"_ambiguity".to_string()));
+        assert_eq!(ast.tree_name(), Some(&"_ambiguity".to_string()));
     }
 
     #[test]
@@ -538,8 +535,8 @@ mod tests {
         %ignore WS
         "#;
 
-        let _opt = Arc::new(ParserOption {
-            ..ParserOption::default()
+        let _opt = Arc::new(ParserConfig {
+            ..ParserConfig::default()
         });
         let _pf = test_frontend(grammar, _opt.clone());
         let parser = EarleyParser::new(_pf.clone(), _opt);
@@ -557,7 +554,7 @@ mod tests {
         C: "c"
         "#;
 
-        let parser_opt = Arc::new(ParserOption::default());
+        let parser_opt = Arc::new(ParserConfig::default());
         let pf = test_frontend(grammar, parser_opt.clone());
         let parser = EarleyParser::new(pf.clone(), parser_opt);
         let mut tk = pf.tokenizer("abc");
@@ -567,7 +564,7 @@ mod tests {
 
     #[test]
     fn finalize_basic_parse_returns_error_for_empty_chart() {
-        let parser_opt = Arc::new(ParserOption::default());
+        let parser_opt = Arc::new(ParserConfig::default());
         let pf = test_frontend(
             r#"
             start: "x"
@@ -580,6 +577,9 @@ mod tests {
         let err = parser
             .finalize_basic_parse(&[], &mut tk, &[])
             .expect_err("empty chart should return an error");
-        assert!(matches!(err, ParserError::FailedToParse(_)));
+        assert!(matches!(
+            err,
+            SwiftletError::Parse(ParseError::FailedToParse(_))
+        ));
     }
 }

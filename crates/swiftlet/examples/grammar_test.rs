@@ -8,12 +8,16 @@ fn main() {
     b: f? "y"
     f: "z""#;
 
-    let conf = Arc::new(ParserOption {start: "s".to_string(),
+    let conf = Arc::new(ParserConfig {
+        start: "s".to_string(),
         debug: true,
         algorithm: Algorithm::Earley,
-        ..Default::default()});
+        ..Default::default()
+    });
 
-    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
+    let parser = Swiftlet::from_str(grammar)
+        .map(|grammar| grammar.parser(conf))
+        .expect("failed to build parser");
     // [wx]z?yz?y[wx]z?y
     let text = "xyzyxy";
     match parser.parse(text) {

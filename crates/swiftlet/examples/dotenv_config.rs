@@ -16,7 +16,6 @@ use swiftlet::preclude::*;
 // %ignore SH_COMMENT
 // "#;
 
-
 const GRAMMAR: &str = r#"
 start: line*
 ?line: assignment _NL
@@ -46,10 +45,10 @@ struct AppConfig {
     log_level: String,
 }
 
-fn token_word(ast: &AST) -> Option<&str> {
+fn token_word(ast: &Ast) -> Option<&str> {
     match ast {
-        AST::Token(token) => Some(token.word()),
-        AST::Tree(_, children) => children.iter().find_map(token_word),
+        Ast::Token(token) => Some(token.word()),
+        Ast::Tree(_, children) => children.iter().find_map(token_word),
     }
 }
 
@@ -61,8 +60,8 @@ fn unquote(value: &str) -> String {
     }
 }
 
-fn parse_assignment(ast: &AST) -> Option<(String, String)> {
-    let AST::Tree(name, children) = ast else {
+fn parse_assignment(ast: &Ast) -> Option<(String, String)> {
+    let Ast::Tree(name, children) = ast else {
         return None;
     };
 
@@ -75,7 +74,7 @@ fn parse_assignment(ast: &AST) -> Option<(String, String)> {
     Some((key, unquote(value)))
 }
 
-fn ast_to_env(ast: &AST) -> HashMap<String, String> {
+fn ast_to_env(ast: &Ast) -> HashMap<String, String> {
     ast.iter_trees("assignment")
         .filter_map(parse_assignment)
         .collect()
@@ -124,13 +123,15 @@ DATABASE_URL="postgres://swiftlet:secret@localhost:5432/app"
 LOG_LEVEL=debug
 "#;
 
-    let parser_opt = Arc::new(ParserOption {
+    let parser_opt = Arc::new(ParserConfig {
         algorithm: Algorithm::CLR,
         start: "start".to_string(),
         ..Default::default()
     });
 
-    let parser = Swiftlet::from_string(GRAMMAR, parser_opt).expect("failed to build parser");
+    let parser = Swiftlet::from_str(GRAMMAR)
+        .map(|grammar| grammar.parser(parser_opt))
+        .expect("failed to build parser");
 
     match parser.parse(input) {
         Ok(ast) => {
@@ -144,11 +145,7 @@ LOG_LEVEL=debug
                     println!("{config:#?}");
                     println!(
                         "\nService will start on {}:{} with {} workers, debug={}, log_level={}",
-                        config.host,
-                        config.port,
-                        config.workers,
-                        config.debug,
-                        config.log_level
+                        config.host, config.port, config.workers, config.debug, config.log_level
                     );
                     println!("Database: {}", config.database_url);
                 }

@@ -3,8 +3,8 @@ use pyo3::prelude::*;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Mutex};
 use swiftlet::{
-    Ambiguity as RustAmbiguity, ParserOption, Swiftlet as RustSwiftlet,
-    ast::AST, grammar::Algorithm as RustAlgorithm,
+    Ambiguity as RustAmbiguity, Parser as RustParser, ParserConfig,
+    Swiftlet as RustSwiftlet, ast::Ast, grammar::Algorithm as RustAlgorithm,
 };
 
 /// Parses the Python-facing algorithm name into the Rust enum.
@@ -46,8 +46,8 @@ fn build_parser_option(
     algorithm: &str,
     ambiguity: &str,
     debug: bool,
-) -> PyResult<Arc<ParserOption>> {
-    Ok(Arc::new(ParserOption {
+) -> PyResult<Arc<ParserConfig>> {
+    Ok(Arc::new(ParserConfig {
         start: start.to_string(),
         algorithm: parse_algorithm(algorithm)?,
         ambiguity: parse_ambiguity(ambiguity)?,
@@ -62,10 +62,10 @@ fn build_parser_from_grammar(
     algorithm: &str,
     ambiguity: &str,
     debug: bool,
-) -> PyResult<RustSwiftlet> {
+) -> PyResult<RustParser> {
     let parser_option = build_parser_option(start, algorithm, ambiguity, debug)?;
     let parser = catch_unwind(AssertUnwindSafe(|| {
-        RustSwiftlet::from_string(grammar, parser_option)
+        RustSwiftlet::from_str(grammar).map(|grammar| grammar.parser(parser_option))
     }))
     .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?;
     parser.map_err(|err| PyValueError::new_err(err.to_string()))
@@ -78,10 +78,10 @@ fn build_parser_from_file(
     algorithm: &str,
     ambiguity: &str,
     debug: bool,
-) -> PyResult<RustSwiftlet> {
+) -> PyResult<RustParser> {
     let parser_option = build_parser_option(start, algorithm, ambiguity, debug)?;
     let parser = catch_unwind(AssertUnwindSafe(|| {
-        RustSwiftlet::from_file(file.to_string(), parser_option)
+        RustSwiftlet::from_file(file).map(|grammar| grammar.parser(parser_option))
     }))
     .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?;
     parser.map_err(|err| PyValueError::new_err(err.to_string()))
@@ -271,9 +271,9 @@ impl Tree {
 }
 
 /// Converts a Rust AST node into the exported Python object graph.
-fn convert_to_py(py: Python<'_>, ast: &AST) -> PyResult<Py<PyAny>> {
+fn convert_to_py(py: Python<'_>, ast: &Ast) -> PyResult<Py<PyAny>> {
     match &ast {
-        AST::Token(token) => {
+        Ast::Token(token) => {
             let py_token = Token {
                 word: token.word().to_string(),
                 start: token.get_start(),
@@ -283,7 +283,7 @@ fn convert_to_py(py: Python<'_>, ast: &AST) -> PyResult<Py<PyAny>> {
             };
             Ok(py_token.into_pyobject(py)?.into_any().unbind())
         }
-        AST::Tree(name, children) => {
+        Ast::Tree(name, children) => {
             let child = children
                 .iter()
                 .map(|child| convert_to_py(py, child).unwrap())
@@ -301,7 +301,7 @@ fn convert_to_py(py: Python<'_>, ast: &AST) -> PyResult<Py<PyAny>> {
 /// Python wrapper around the Rust `Swiftlet` parser.
 #[pyclass(module = "swiftlet._core")]
 pub struct Swiftlet {
-    inner: Mutex<RustSwiftlet>,
+    inner: Mutex<RustParser>,
 }
 
 #[pymethods]

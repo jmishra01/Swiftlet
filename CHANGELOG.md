@@ -2,6 +2,23 @@
 
 This changelog is derived from git tags and the commits since the latest tag.
 
+### Recent Changes
+
+Changes in `v0.1.5..recent-changes`
+
+### Added
+- Refactored Rust parser construction to use `Swiftlet::from_str(...)` / `Swiftlet::from_file(...)` plus `grammar.parser(...)` instead of direct string/file parser constructors.
+- File-based Rust grammar loading now returns `SwiftletError::GrammarFileReadError` when the grammar file cannot be read, instead of panicking.
+- Kept the Python-facing constructor API unchanged while updating the bindings to use the new Rust grammar source API internally.
+- Context-aware tokenization support, including parser-guided terminal selection for ambiguous token sets.
+- Revert `LexerMode` changes.
+- Renamed the public error type from ParserError to SwiftletError. 
+- Split error handling into nested domain-specific enums: GrammarError, LexerError, and ParseError. 
+- Updated Rust parser, grammar-loading, and transformation paths to return structured SwiftletError variants. 
+- Preserved Python-facing error behavior while routing binding errors through the new Rust error hierarchy. 
+- Added and updated Rust and Python tests to cover the refactored error structure, including grammar file read failures.
+
+
 ### v0.1.5 - 2026-03-31
 
 Changes in `v0.1.4..v0.1.5`:

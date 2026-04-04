@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserConfig, Swiftlet};
 
 fn main() {
     let text = r#"
@@ -12,8 +12,10 @@ fn main() {
         %ignore WS
         "#;
 
-    let conf = Arc::new(ParserOption::default());
-    let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
+    let conf = Arc::new(ParserConfig::default());
+    let text_parser = Swiftlet::from_str(text)
+        .map(|grammar| grammar.parser(conf))
+        .expect("failed to build parser");
 
     for w in ["AB", "A-+B"].iter() {
         match text_parser.parse(w) {

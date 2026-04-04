@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 use swiftlet::grammar::Algorithm;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserConfig, Swiftlet};
 
 fn main() {
     let grammars = [
@@ -21,14 +21,16 @@ fn main() {
         "#,
     ];
 
-    let conf = Arc::new(ParserOption {
+    let conf = Arc::new(ParserConfig {
         algorithm: Algorithm::CLR,
         start: "s".to_string(),
         ..Default::default()
     });
     for grammar in grammars {
         let t1 = Instant::now();
-        let parser = Swiftlet::from_string(grammar, conf.clone()).expect("failed to build parser");
+        let parser = Swiftlet::from_str(grammar)
+            .map(|grammar| grammar.parser(conf.clone()))
+            .expect("failed to build parser");
         for text in ["ABAB", "ABAAAB"].iter() {
             let t11 = Instant::now();
             if let Ok(parsed) = parser.parse(text) {

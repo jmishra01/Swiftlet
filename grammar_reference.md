@@ -401,12 +401,12 @@ To write maintainable grammars:
 
     assignment: NAME "=" expr
 
-    expr: expr "+" term
-        | expr "-" term
+    expr: expr "+" term -> add
+        | expr "-" term -> sub
         | term
 
-    term: term "*" factor
-        | term "/" factor
+    term: term "*" factor -> mult
+        | term "/" factor -> divide
         | factor
 
     factor: NUMBER

@@ -12,13 +12,13 @@ pub enum Algorithm {
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Default)]
-pub(crate) struct RuleOption {
+pub(crate) struct RuleMeta {
     expand: bool,
     priority: usize,
     alias_rule: Option<Vec<String>>,
 }
 
-impl RuleOption {
+impl RuleMeta {
     /// Creates rule metadata with expand flag and precedence priority.
     pub(crate) fn new(expand: bool, priority: usize, alias_rule: Option<Vec<String>>) -> Self {
         Self {
@@ -48,7 +48,7 @@ impl RuleOption {
 pub struct Rule {
     pub(crate) origin: Arc<Symbol>,
     pub(crate) expansion: Vec<Arc<Symbol>>,
-    pub(crate) rule_option: Arc<RuleOption>,
+    pub(crate) rule_option: Arc<RuleMeta>,
     pub(crate) order: usize,
 }
 
@@ -57,7 +57,7 @@ impl Rule {
     pub(crate) fn new(
         origin: Arc<Symbol>,
         expansion: Vec<Arc<Symbol>>,
-        rule_option: Arc<RuleOption>,
+        rule_option: Arc<RuleMeta>,
         order: usize,
     ) -> Self {
         Self {
@@ -105,7 +105,7 @@ where
         HashMap::from_iter(arr.into_iter().map(|(name, expansions)| {
             let name = name.as_ref();
             let is_expand = name.starts_with("?");
-            let rule_option = Arc::new(RuleOption::new(is_expand, 0, None));
+            let rule_option = Arc::new(RuleMeta::new(is_expand, 0, None));
             let clean_name = if is_expand {
                 name.strip_prefix("?").unwrap().to_string()
             } else {
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn rule_option_new_and_accessors_work() {
-        let opts = RuleOption::new(true, 7, None);
+        let opts = RuleMeta::new(true, 7, None);
         assert!(opts.is_expand());
         assert_eq!(opts.priority(), 7);
     }
@@ -150,7 +150,7 @@ mod tests {
                 Arc::new(Symbol::NonTerminal("expr".to_string())),
                 Arc::new(Symbol::Terminal("INT".to_string())),
             ],
-            Arc::new(RuleOption::new(false, 0, None)),
+            Arc::new(RuleMeta::new(false, 0, None)),
             1,
         );
 

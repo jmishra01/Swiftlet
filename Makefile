@@ -13,6 +13,15 @@ ALGORITHM ?= earley
 build-rust:
 	cargo build -p swiftlet --release
 
+test-rust:
+	cargo test -p swiftlet -q
+
+bench-rust:
+	cargo bench -p swiftlet -q
+
+coverage-rust:
+	cargo llvm-cov
+
 build-python:
 	mkdir -p $(WHEEL_DIR)
 	env -u VIRTUAL_ENV PYO3_PYTHON=$(abspath $(PYTHON)) $(MATURIN) build --release -m pyswiftlet/Cargo.toml -o $(WHEEL_DIR)
@@ -26,15 +35,6 @@ test-python:
 	trap '$(MAKE) clean-python-artifacts' EXIT; \
 	$(MAKE) build-python-extension; \
 	PYTHONPATH=$(PYTHONPATH_LOCAL) $(PYTHON) -m unittest discover -s pyswiftlet/tests -v
-
-bench-rust: build-rust
-	cargo run --release -p swiftlet --example benchmark_parse -- --rounds $(ROUNDS) --repetitions $(REPETITIONS) --algorithm $(ALGORITHM)
-
-bench-python: build-python
-	$(PYTHON) pyswiftlet/benchmarks/benchmark_parse.py --rounds $(ROUNDS) --repetitions $(REPETITIONS) --algorithm $(ALGORITHM)
-
-compare-benchmarks: build-rust build-python
-	$(PYTHON) pyswiftlet/benchmarks/compare_benchmarks.py --rounds $(ROUNDS) --repetitions $(REPETITIONS) --algorithm $(ALGORITHM)
 
 clean-python-artifacts:
 	find pyswiftlet -type d -name __pycache__ -prune -exec rm -rf {} +

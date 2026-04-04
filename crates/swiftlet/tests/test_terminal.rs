@@ -1,7 +1,7 @@
 use std::fs;
 use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
-use swiftlet::{Ambiguity, ParserOption, Swiftlet};
+use swiftlet::{Ambiguity, ParserConfig, Swiftlet};
 
 #[macro_use]
 mod common;
@@ -19,27 +19,14 @@ multi_test!(
     Algorithm::Earley
 );
 
-multi_test!(
+multi_test_multi_input_texts!(
     terminal_clr_flag_i_text_ab,
     terminal_earley_flag_i_text_ab,
     r#"
     s: A
     A: "a" "b"i
     "#,
-    "ab",
-    "s",
-    Algorithm::CLR,
-    Algorithm::Earley
-);
-
-multi_test!(
-    terminal_clr_flag_i_text_aB,
-    terminal_earley_flag_i_text_aB,
-    r#"
-    s: A
-    A: "a" "b"i
-    "#,
-    "aB",
+    ["ab", "aB"],
     "s",
     Algorithm::CLR,
     Algorithm::Earley
@@ -89,37 +76,22 @@ multi_test!(
     Algorithm::Earley
 );
 
-multi_test!(
-    terminal_clr_or_xb,
-    terminal_earley_or_xb,
+multi_test_multi_input_texts!(
+    terminal_clr_or_xb_ab,
+    terminal_earley_or_xb_ab,
     r#"
     s: A
     A: (X | "a") B
     B: "b"
     X: "x"
     "#,
-    "xb",
+    ["xb", "ab"],
     "s",
     Algorithm::CLR,
     Algorithm::Earley
 );
 
-multi_test!(
-    terminal_clr_or_ab,
-    terminal_earley_or_ab,
-    r#"
-    s: A
-    A: (X | "a") B
-    B: "b"
-    X: "x"
-    "#,
-    "ab",
-    "s",
-    Algorithm::CLR,
-    Algorithm::Earley
-);
-
-multi_test!(
+multi_test_multi_input_texts!(
     terminal_clr_or_op_xab,
     terminal_earley_or_op_xab,
     r#"
@@ -128,56 +100,27 @@ multi_test!(
     B: "b"
     X: "x"
     "#,
-    "xab",
+    ["xab", "xaxxab"],
     "s",
     Algorithm::CLR,
     Algorithm::Earley
 );
 
-multi_test!(
-    terminal_clr_or_op_xaxxab,
-    terminal_earley_or_op_xaxxab,
-    r#"
-    s: A
-    A: (X | "a")+ B
-    B: "b"
-    X: "x"
-    "#,
-    "xaxxab",
-    "s",
-    Algorithm::CLR,
-    Algorithm::Earley
-);
-
-multi_test!(
-    terminal_clr_regex_abb,
-    terminal_earley_regex_abb,
+multi_test_multi_input_texts!(
+    terminal_clr_regex,
+    terminal_earley_regex,
     r#"
     s: A
     A: "a" B
     B: /b+c*/
     "#,
-    "abb",
+    ["abb", "abbccc"],
     "s",
     Algorithm::CLR,
     Algorithm::Earley
 );
 
-multi_test!(
-    terminal_clr_regex_abbccc,
-    terminal_earley_regex_abbccc,
-    r#"
-    s: A
-    A: "a" B
-    B: /b+c*/
-    "#,
-    "abbccc",
-    "s",
-    Algorithm::CLR,
-    Algorithm::Earley
-);
-
-multi_test!(
+multi_test_multi_input_texts!(
     terminal_clr_regex_flags_i,
     terminal_earley_regex_flags_i,
     r#"
@@ -185,7 +128,7 @@ multi_test!(
     A: "a" B
     B: /b+c*/i
     "#,
-    "abBcCc",
+    ["abBcCc", "abb", "abbccc"],
     "s",
     Algorithm::CLR,
     Algorithm::Earley
@@ -252,7 +195,7 @@ multi_test!(
 
 #[test]
 fn parser_option_default_values() {
-    let opt = ParserOption::default();
+    let opt = ParserConfig::default();
     assert_eq!(opt.start, "start".to_string());
     assert!(matches!(opt.algorithm, Algorithm::Earley));
     assert!(matches!(opt.ambiguity, Ambiguity::Resolve));
@@ -270,12 +213,13 @@ fn swiftlet_from_file_parses_input() {
     let path = std::env::temp_dir().join("swiftlet_test_grammar.lark");
     fs::write(&path, grammar).unwrap();
 
-    let parser_option = Arc::new(ParserOption {
+    let parser_option = Arc::new(ParserConfig {
         algorithm: Algorithm::CLR,
-        ..ParserOption::default()
+        ..ParserConfig::default()
     });
-    let parser = Swiftlet::from_file(path.to_string_lossy().to_string(), parser_option)
-        .expect("failed to build parser");
+    let parser = Swiftlet::from_file(path.to_string_lossy().as_ref())
+        .expect("failed to load grammar")
+        .parser(parser_option);
     assert!(parser.parse("10").is_ok());
 
     let _ = fs::remove_file(path);

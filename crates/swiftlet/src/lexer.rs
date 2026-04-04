@@ -1,6 +1,6 @@
-use crate::error::ParserError;
+use crate::error::SwiftletError;
 use fancy_regex::{Regex, RegexBuilder};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
@@ -188,7 +188,7 @@ impl PartialEq for TerminalDef {
 }
 
 /// Stores a concrete token slice and its source location metadata.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Token {
     source: Arc<str>,
     start: usize,
@@ -259,21 +259,6 @@ impl Display for Token {
     }
 }
 
-impl Debug for Token {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-
-        let text = format!(
-            "Token {{ word: {}, start: {}, end: {}, line: {}, terminal: {:?}  }}",
-            self.word(),
-            self.start,
-            self.end,
-            self.line,
-            self.terminal
-        );
-        f.write_str(text.as_str())
-    }
-}
-
 impl PartialEq for Token {
     fn eq(&self, other: &Self) -> bool {
         self.word() == other.word() && self.line == other.line && self.terminal == other.terminal
@@ -297,9 +282,7 @@ pub struct Tokenizer {
     start: usize,
     line: usize,
     len: usize,
-    terminals: Arc<[Arc<TerminalDef>]>,
     sym_terminal_def: Arc<HashMap<Arc<Symbol>, Arc<TerminalDef>>>,
-    ignore: Arc<HashSet<Arc<Symbol>>>,
     ignore_terminals: Arc<[Arc<TerminalDef>]>,
 }
 
@@ -307,9 +290,7 @@ impl Tokenizer {
     /// Creates a tokenizer from input text, terminal definitions, and ignored terminal symbols.
     pub(crate) fn new(
         text: Arc<str>,
-        terminals: Arc<[Arc<TerminalDef>]>,
         sym_terminal_def: Arc<HashMap<Arc<Symbol>, Arc<TerminalDef>>>,
-        ignore: Arc<HashSet<Arc<Symbol>>>,
         ignore_terminals: Arc<[Arc<TerminalDef>]>,
     ) -> Self {
         let len = text.len();
@@ -319,9 +300,7 @@ impl Tokenizer {
             start: 0usize,
             line: 0usize,
             len,
-            terminals,
             sym_terminal_def,
-            ignore,
             ignore_terminals,
         }
     }
@@ -362,7 +341,7 @@ impl Tokenizer {
     pub(crate) fn peek_token_with_next_symbol(
         &self,
         next_symbols: &Arc<Symbol>,
-    ) -> Result<Option<TokenMatch>, ParserError> {
+    ) -> Result<Option<TokenMatch>, SwiftletError> {
         let Some(terminal) = self.sym_terminal_def.get(next_symbols) else {
             return Ok(None);
         };
@@ -415,19 +394,18 @@ impl Tokenizer {
 
 #[derive(Debug)]
 pub(crate) struct LexerConf {
-    terminals: Arc<[Arc<TerminalDef>]>,
     sym_terminal_def: Arc<HashMap<Arc<Symbol>, Arc<TerminalDef>>>,
 }
 
 impl LexerConf {
     /// Creates lexer configuration from terminal definitions.
     pub fn new(terminals: Vec<Arc<TerminalDef>>) -> Self {
-        let sym_terminal_def = HashMap::from_iter(terminals.iter().map(|terminal_def| {
-            (terminal_def.name.clone(), terminal_def.clone())
-        }));
+        let it = terminals
+            .iter()
+            .map(|terminal_def| (terminal_def.name.clone(), terminal_def.clone()));
+        let sym_terminal_def = HashMap::from_iter(it);
 
         Self {
-            terminals: Arc::from(terminals),
             sym_terminal_def: Arc::new(sym_terminal_def),
         }
     }
@@ -437,17 +415,10 @@ impl LexerConf {
     }
 
     /// Creates a tokenizer over `text` with a provided ignore-symbol set.
-    pub fn tokenize(
-        &self,
-        text: &str,
-        ignore: Arc<HashSet<Arc<Symbol>>>,
-        ignore_terminals: Arc<[Arc<TerminalDef>]>,
-    ) -> Tokenizer {
+    pub fn tokenize(&self, text: &str, ignore_terminals: Arc<[Arc<TerminalDef>]>) -> Tokenizer {
         Tokenizer::new(
             Arc::<str>::from(text),
-            self.terminals.clone(),
             self.sym_terminal_def.clone(),
-            ignore,
             ignore_terminals,
         )
     }

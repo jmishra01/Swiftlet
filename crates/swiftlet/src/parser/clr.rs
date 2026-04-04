@@ -1,14 +1,14 @@
-use crate::error::ParserError;
+use crate::error::{LexerError, ParseError, SwiftletError};
 use crate::lexer::TokenMatch;
 use crate::{
-    ParserOption,
-    ast::AST,
-    grammar::{Rule, RuleOption},
+    ParserConfig,
+    ast::Ast,
+    grammar::{Rule, RuleMeta},
     lexer::{Symbol, Token, Tokenizer},
     non_terms,
-    parser::Parser,
+    parser::ParserBackend,
     parser::utils::dot_state,
-    parser_frontends::ParserFrontend,
+    parser_frontends::GrammarRuntime,
     terms,
 };
 use indexmap::IndexSet;
@@ -20,46 +20,46 @@ use std::sync::Arc;
 // Type Alias
 pub(crate) type SymbolSet = IndexSet<Arc<Symbol>>;
 pub(crate) type SymbolMap = HashMap<Arc<Symbol>, Vec<(usize, Arc<Rule>)>>;
-pub(crate) type ItemSet = HashSet<Arc<Item>>;
+pub(crate) type ItemSet = HashSet<Arc<ClrItem>>;
 pub(crate) type VecItemSet = Vec<ItemSet>;
 pub(crate) type StateSymbol = HashMap<usize, HashSet<Arc<Symbol>>>;
-pub(crate) type Action = HashMap<(usize, Arc<Symbol>), IndexSet<ActionTable>>;
+pub(crate) type Action = HashMap<(usize, Arc<Symbol>), IndexSet<ParseAction>>;
 pub(crate) type GoTo = HashMap<(usize, Arc<Symbol>), usize>;
 pub(crate) type First = HashMap<Arc<Symbol>, HashSet<Arc<Symbol>>>;
 type ItemSetKey = Vec<(usize, usize, bool, String)>;
 
 /// Describes a parser table action for the CLR automaton.
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub enum ActionTable {
+pub enum ParseAction {
     Shift(usize),
     Reduce(usize),
     Accepted,
 }
 
-impl ActionTable {
+impl ParseAction {
     /// Returns action kind label.
     fn name(&self) -> String {
         match self {
-            ActionTable::Shift(_) => "Shift".to_string(),
-            ActionTable::Reduce(_) => "Reduce".to_string(),
-            ActionTable::Accepted => "Accepted".to_string(),
+            ParseAction::Shift(_) => "Shift".to_string(),
+            ParseAction::Reduce(_) => "Reduce".to_string(),
+            ParseAction::Accepted => "Accepted".to_string(),
         }
     }
 }
 
 /// Represents a CLR item with a lookahead symbol.
 #[derive(Eq, Hash, PartialEq, Debug)]
-pub(crate) struct Item {
+pub(crate) struct ClrItem {
     pub(crate) rule_id: usize,
     pub(crate) dot: usize,
     pub(crate) rule: Arc<Rule>,
     pub(crate) lookahead: Arc<Symbol>,
 }
 
-impl Item {
+impl ClrItem {
     /// Creates an LR item with lookahead.
-    fn new(rule_id: usize, dot: usize, rule: Arc<Rule>, lookahead: Arc<Symbol>) -> Item {
-        Item {
+    fn new(rule_id: usize, dot: usize, rule: Arc<Rule>, lookahead: Arc<Symbol>) -> ClrItem {
+        ClrItem {
             rule_id,
             dot,
             rule,
@@ -93,7 +93,7 @@ impl Item {
         if self.is_complete() {
             return None;
         }
-        Some(Item::new(
+        Some(ClrItem::new(
             self.rule_id,
             self.dot + 1,
             self.rule.clone(),
@@ -102,7 +102,7 @@ impl Item {
     }
 }
 
-impl Display for Item {
+impl Display for ClrItem {
     /// Formats item as `rule_id; A -> alpha ● beta ; lookahead`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (rule, before_dot, after_dot) = dot_state(&self.rule, self.dot);
@@ -143,13 +143,10 @@ fn item_set_key(items: &ItemSet) -> ItemSetKey {
 #[inline]
 /// Collects grammar rules and constructs a symbol-to-rule index map.
 pub(crate) fn setup(
-    parser_frontend: Arc<ParserFrontend>,
+    parser_frontend: Arc<GrammarRuntime>,
     start: Arc<Symbol>,
 ) -> (Vec<Arc<Rule>>, SymbolMap) {
-    let mut rules = parser_frontend
-        .get_parser()
-        .get_all_expansion()
-        .to_vec();
+    let mut rules = parser_frontend.get_parser().get_all_expansion().to_vec();
 
     let mut mapped: SymbolMap = HashMap::new();
 
@@ -163,7 +160,7 @@ pub(crate) fn setup(
     let augmented_grammar = Arc::new(Rule::new(
         non_terms!("gamma"),
         vec![start],
-        Arc::new(RuleOption::default()),
+        Arc::new(RuleMeta::default()),
         0,
     ));
     rules.push(augmented_grammar);
@@ -171,10 +168,10 @@ pub(crate) fn setup(
 }
 
 /// Canonical LR parser with precomputed ACTION and GOTO tables.
-pub struct Clr {
-    parser_frontend: Arc<ParserFrontend>,
+pub struct ClrParser {
+    parser_frontend: Arc<GrammarRuntime>,
     #[allow(dead_code)]
-    parser_conf: Arc<ParserOption>,
+    parser_conf: Arc<ParserConfig>,
     pub(crate) rules: Vec<Arc<Rule>>,
     pub(crate) mapped: SymbolMap,
     pub(crate) first: First,
@@ -183,9 +180,9 @@ pub struct Clr {
     state_symbol: StateSymbol,
 }
 
-impl Clr {
+impl ClrParser {
     /// Creates a CLR parser and builds canonical items plus ACTION/GOTO tables.
-    pub(crate) fn new(parser_frontend: Arc<ParserFrontend>, parser_conf: Arc<ParserOption>) -> Clr {
+    pub(crate) fn new(parser_frontend: Arc<GrammarRuntime>, parser_conf: Arc<ParserConfig>) -> ClrParser {
         let (rules, mapped) = setup(parser_frontend.clone(), non_terms!(parser_conf.start));
 
         let first = first_set(&rules);
@@ -196,7 +193,7 @@ impl Clr {
             debug_first_set(&first);
         }
 
-        let mut clr = Clr {
+        let mut clr = ClrParser {
             parser_frontend,
             parser_conf,
             rules,
@@ -326,7 +323,7 @@ impl Clr {
                         action
                             .entry((index, get_last_symbol()))
                             .or_default()
-                            .insert(ActionTable::Accepted);
+                            .insert(ParseAction::Accepted);
                         state_symbol
                             .entry(index)
                             .or_default()
@@ -335,7 +332,7 @@ impl Clr {
                         action
                             .entry((index, it.lookahead.clone()))
                             .or_default()
-                            .insert(ActionTable::Reduce(it.rule_id));
+                            .insert(ParseAction::Reduce(it.rule_id));
 
                         state_symbol
                             .entry(index)
@@ -349,7 +346,7 @@ impl Clr {
                         action
                             .entry((index, next_symbol.clone()))
                             .or_default()
-                            .insert(ActionTable::Shift(*transition_index));
+                            .insert(ParseAction::Shift(*transition_index));
                         state_symbol
                             .entry(index)
                             .or_default()
@@ -366,8 +363,8 @@ impl Clr {
     /// Resolves a parser action from a possible conflict set using priorities.
     fn get_next_action<'a>(
         &self,
-        lr_table: &'a IndexSet<ActionTable>,
-    ) -> Result<&'a ActionTable, ParserError> {
+        lr_table: &'a IndexSet<ParseAction>,
+    ) -> Result<&'a ParseAction, SwiftletError> {
         if lr_table.len() == 1 {
             return Ok(lr_table.first().unwrap());
         }
@@ -376,13 +373,11 @@ impl Clr {
 
         for action in lr_table.iter() {
             let priority = match action {
-                ActionTable::Reduce(n) => self.rules
-                    .get(*n)
-                    .map(|rule| rule.rule_option.priority()),
-                ActionTable::Accepted => self.rules
-                    .first()
-                    .map(|rule| rule.rule_option.priority()),
-                ActionTable::Shift(_) => None,
+                ParseAction::Reduce(n) => {
+                    self.rules.get(*n).map(|rule| rule.rule_option.priority())
+                }
+                ParseAction::Accepted => self.rules.first().map(|rule| rule.rule_option.priority()),
+                ParseAction::Shift(_) => None,
             };
 
             let Some(priority) = priority else {
@@ -392,10 +387,11 @@ impl Clr {
                     .collect::<Vec<String>>()
                     .join("-");
 
-                return Err(ParserError::Conflict {
+                return Err(ParseError::Conflict {
                     lr_table: lr_table.clone(),
                     conflict,
-                });
+                }
+                .into());
             };
 
             for other in lr_table.iter() {
@@ -404,14 +400,13 @@ impl Clr {
                 }
 
                 let other_priority = match other {
-                    ActionTable::Reduce(n) => {
+                    ParseAction::Reduce(n) => {
                         self.rules.get(*n).map(|rule| rule.rule_option.priority())
                     }
-                    ActionTable::Accepted => self
-                        .rules
-                        .first()
-                        .map(|rule| rule.rule_option.priority()),
-                    ActionTable::Shift(_) => None,
+                    ParseAction::Accepted => {
+                        self.rules.first().map(|rule| rule.rule_option.priority())
+                    }
+                    ParseAction::Shift(_) => None,
                 };
 
                 if other_priority == Some(priority) {
@@ -421,10 +416,11 @@ impl Clr {
                         .collect::<Vec<String>>()
                         .join("-");
 
-                    return Err(ParserError::Conflict {
+                    return Err(ParseError::Conflict {
                         lr_table: lr_table.clone(),
                         conflict,
-                    });
+                    }
+                    .into());
                 }
             }
 
@@ -443,10 +439,11 @@ impl Clr {
                 .collect::<Vec<String>>()
                 .join("-");
 
-            Err(ParserError::Conflict {
+            Err(ParseError::Conflict {
                 lr_table: lr_table.clone(),
                 conflict,
-            })
+            }
+            .into())
         }
     }
 
@@ -456,17 +453,17 @@ impl Clr {
         &self,
         pos: usize,
         stack_states: &mut Vec<usize>,
-        stack_symbols: &mut Vec<AST>,
+        stack_symbols: &mut Vec<Ast>,
         lookahead: &TokenMatch,
         tokenizer: &mut Tokenizer,
-    ) -> Result<TokenMatch, ParserError> {
+    ) -> Result<TokenMatch, SwiftletError> {
         stack_states.push(pos);
-        stack_symbols.push(AST::Token(lookahead.token.clone()));
+        stack_symbols.push(Ast::Token(lookahead.token.clone()));
 
         match self.get_lookahead(tokenizer, pos) {
             Ok(next_lookahead) => match next_lookahead {
                 Some(next_lookahead) => Ok(next_lookahead),
-                None => Err(ParserError::TokenizationStateError(pos.to_string())),
+                None => Err(LexerError::State(pos.to_string()).into()),
             },
             Err(_) => {
                 let token = Arc::new(Token::new(
@@ -490,19 +487,19 @@ impl Clr {
         &self,
         pos: usize,
         stack_states: &mut Vec<usize>,
-        stack_symbols: &mut Vec<AST>,
-    ) -> Result<bool, ParserError> {
+        stack_symbols: &mut Vec<Ast>,
+    ) -> Result<bool, SwiftletError> {
         let rule = self.rules.get(pos).unwrap();
 
         let mut children = Vec::with_capacity(rule.expansion.len());
         for _ in 0..rule.expansion.len() {
             stack_states.pop();
             let ast = stack_symbols.pop().unwrap();
-            let is_flattened = ast.is_start_with_underscore();
+            let is_flattened = ast.is_hidden();
             if is_flattened {
                 match ast {
-                    AST::Tree(_, child) => children.extend(child.into_iter().rev()),
-                    AST::Token(_) => continue,
+                    Ast::Tree(_, child) => children.extend(child.into_iter().rev()),
+                    Ast::Token(_) => continue,
                 }
             } else {
                 children.push(ast);
@@ -512,14 +509,14 @@ impl Clr {
         if rule.rule_option.is_expand() && children.len() == 1 {
             stack_symbols.push(children.pop().unwrap());
         } else if children.len() == 1
-            && let Some(AST::Tree(name, _)) = children.first()
+            && let Some(Ast::Tree(name, _)) = children.first()
             && let Some(alias_rule) = rule.rule_option.alias_rule()
             && alias_rule.contains(name)
         {
             stack_symbols.push(children.pop().unwrap());
         } else {
             children.reverse();
-            stack_symbols.push(AST::Tree(
+            stack_symbols.push(Ast::Tree(
                 rule.origin.as_ref().as_str().to_string(),
                 children,
             ));
@@ -530,7 +527,7 @@ impl Clr {
         {
             stack_states.push(*goto_state);
         } else {
-            return Err(ParserError::TransitionError(rule.origin.clone()));
+            return Err(ParseError::Transition(rule.origin.clone()).into());
         }
         Ok(true)
     }
@@ -539,7 +536,7 @@ impl Clr {
         &self,
         tokenizer: &mut Tokenizer,
         state: usize,
-    ) -> Result<Option<TokenMatch>, ParserError> {
+    ) -> Result<Option<TokenMatch>, SwiftletError> {
         #[cfg(feature = "debug")]
         if self.parser_conf.debug {
             println!();
@@ -594,19 +591,19 @@ impl Clr {
     }
 }
 
-impl Parser for Clr {
+impl ParserBackend for ClrParser {
     /// Returns parser frontend.
-    fn get_parser_frontend(&self) -> Arc<ParserFrontend> {
+    fn get_parser_frontend(&self) -> Arc<GrammarRuntime> {
         self.parser_frontend.clone()
     }
 
-    fn parse(&self, tokenizer: &mut Tokenizer) -> Result<AST, ParserError> {
+    fn parse(&self, tokenizer: &mut Tokenizer) -> Result<Ast, SwiftletError> {
         let mut stack_states = vec![0usize];
         let mut stack_symbols = Vec::new();
         let mut lookahead = match self.get_lookahead(tokenizer, 0) {
             Ok(lookahead) => match lookahead {
                 Some(lookahead) => lookahead,
-                None => return Err(ParserError::TokenizationStateError("0".to_string())),
+                None => return Err(LexerError::State("0".to_string()).into()),
             },
             Err(err) => {
                 return Err(err);
@@ -624,8 +621,8 @@ impl Parser for Clr {
                 // Check SR & RR conflict
                 match self.get_next_action(lr_table) {
                     Ok(action) => match action {
-                        ActionTable::Accepted => break,
-                        ActionTable::Shift(pos) => {
+                        ParseAction::Accepted => break,
+                        ParseAction::Shift(pos) => {
                             lookahead = self.shift_action(
                                 *pos,
                                 &mut stack_states,
@@ -634,7 +631,7 @@ impl Parser for Clr {
                                 tokenizer,
                             )?;
                         }
-                        ActionTable::Reduce(pos) => {
+                        ParseAction::Reduce(pos) => {
                             self.reduce_action(*pos, &mut stack_states, &mut stack_symbols)?;
                         }
                     },
@@ -643,22 +640,20 @@ impl Parser for Clr {
                     }
                 }
             } else {
-                return Err(ParserError::RuleNotFound(
-                    lookahead.token.word().to_string(),
-                ));
+                return Err(ParseError::RuleNotFound(lookahead.token.word().to_string()).into());
             }
         }
         if let Some(ast) = stack_symbols.pop() {
             return Ok(ast);
         }
-        Err(ParserError::FailedToParse(tokenizer.get_text().to_string()))
+        Err(ParseError::FailedToParse(tokenizer.get_text().to_string()).into())
     }
 }
 
 /// Computes closure for an item set and collects next transition symbols.
 pub(crate) fn closure(
-    lr_parser: &Clr,
-    it_item: impl Iterator<Item = Arc<Item>>,
+    lr_parser: &ClrParser,
+    it_item: impl Iterator<Item = Arc<ClrItem>>,
 ) -> (ItemSet, SymbolSet) {
     let mut next_symbols: SymbolSet = IndexSet::new();
     let mut items: ItemSet = HashSet::new();
@@ -679,12 +674,13 @@ pub(crate) fn closure(
         next_symbols.insert(next_symbol.clone());
 
         if !next_symbol.is_terminal()
-            && let Some(productions) = lr_parser.mapped.get(next_symbol) {
+            && let Some(productions) = lr_parser.mapped.get(next_symbol)
+        {
             if let Some(v) = item.rule.expansion[item.dot + 1..].first() {
                 let lookahead = lr_parser.get_first(v).unwrap();
                 for (index, rule) in productions.iter() {
                     for lh in lookahead.iter() {
-                        let next_item = Arc::new(Item::new(*index, 0, rule.clone(), lh.clone()));
+                        let next_item = Arc::new(ClrItem::new(*index, 0, rule.clone(), lh.clone()));
                         if items.insert(next_item.clone()) {
                             worklist.push(next_item);
                         }
@@ -693,7 +689,7 @@ pub(crate) fn closure(
             } else {
                 for (index, rule) in productions.iter() {
                     let next_item =
-                        Arc::new(Item::new(*index, 0, rule.clone(), item.lookahead.clone()));
+                        Arc::new(ClrItem::new(*index, 0, rule.clone(), item.lookahead.clone()));
                     if items.insert(next_item.clone()) {
                         worklist.push(next_item);
                     }
@@ -706,7 +702,7 @@ pub(crate) fn closure(
 
 /// Expands canonical LR item sets recursively and records transitions.
 fn find_canonical_items(
-    lr_parser: &mut Clr,
+    lr_parser: &mut ClrParser,
     canonical_items: &mut VecItemSet,
     canonical_index: &mut HashMap<ItemSetKey, usize>,
     next_symbols_by_index: &mut Vec<SymbolSet>,
@@ -747,9 +743,9 @@ fn find_canonical_items(
 }
 
 /// Builds canonical collection of LR(1) item sets and transition graph.
-pub(crate) fn canonical_items(lr_parser: &mut Clr) -> (VecItemSet, GoTo) {
+pub(crate) fn canonical_items(lr_parser: &mut ClrParser) -> (VecItemSet, GoTo) {
     // Augmented grammar
-    let first_items = [Arc::new(Item::new(
+    let first_items = [Arc::new(ClrItem::new(
         lr_parser.get_rules().len() - 1,
         0,
         lr_parser.get_rules().iter().last().unwrap().clone(),
@@ -868,7 +864,7 @@ fn debug_canonical_and_transtion_sets(canonical_items: &VecItemSet, transitions:
         .iter()
         .map(|((k1, k2), v)| (k1, k2, v))
         .collect::<Vec<_>>();
-    trans.sort_by(|a, b| a.0.cmp(&b.0));
+    trans.sort_by(|a, b| a.0.cmp(b.0));
 
     for (index, sym, transition) in trans.iter() {
         println!(

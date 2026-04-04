@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserConfig, Swiftlet};
 
 fn main() {
     // Below grammar is not LR(0), as it contain SR conflicts
@@ -12,11 +12,13 @@ fn main() {
         %import WS
         %ignore WS
         "#;
-    let conf = Arc::new(ParserOption {
+    let conf = Arc::new(ParserConfig {
         start: "a".to_string(),
         ..Default::default()
     });
-    let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
+    let text_parser = Swiftlet::from_str(text)
+        .map(|grammar| grammar.parser(conf))
+        .expect("failed to build parser");
     let ast = text_parser.parse("AB");
     ast.unwrap().print();
     // LR(0)  -> Failed to parse

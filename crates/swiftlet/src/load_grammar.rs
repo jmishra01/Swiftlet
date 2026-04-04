@@ -1,34 +1,34 @@
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
-use crate::builder::GrammarBuilder;
+use crate::engine::ParserEngine;
 use crate::common::get_common_terminals;
-use crate::error::ParserError;
+use crate::error::{GrammarError, SwiftletError};
 use crate::grammar::{Algorithm, Rule, create_rules};
 use crate::lexer::{LexerConf, RegexFlag, Symbol, TerminalDef};
-use crate::parser_frontends::ParserConf;
-use crate::parser_frontends::ParserFrontend;
+use crate::parser_frontends::GrammarRules;
+use crate::parser_frontends::GrammarRuntime;
 use crate::transform::{RuleCompiler, TerminalCompiler, fetch_terminals};
-use crate::{ParserOption, terminal_def};
+use crate::{ParserConfig, terminal_def};
 
-static RULES: LazyLock<HashMap<Arc<Symbol>, Vec<Arc<Rule>>>> = LazyLock::new(get_rules);
+static RULES: LazyLock<HashMap<Arc<Symbol>, Vec<Arc<Rule>>>> = LazyLock::new(grammar_rules);
 
-static TERMINALS: LazyLock<Vec<Arc<TerminalDef>>> = LazyLock::new(get_terminals);
+static TERMINALS: LazyLock<Vec<Arc<TerminalDef>>> = LazyLock::new(grammar_terminals);
 
-pub(crate) static PARSER: LazyLock<Arc<ParserFrontend>> = LazyLock::new(get_parser);
+pub(crate) static PARSER: LazyLock<Arc<GrammarRuntime>> = LazyLock::new(grammar_runtime);
 
-pub static GRAMMAR_BUILDER: LazyLock<GrammarBuilder> = LazyLock::new(|| {
-    let tp_conf = Arc::new(ParserOption {
+pub static GRAMMAR_PARSER: LazyLock<ParserEngine> = LazyLock::new(|| {
+    let tp_conf = Arc::new(ParserConfig {
         algorithm: Algorithm::CLR,
         ..Default::default()
     });
-    GrammarBuilder::new(PARSER.clone(), tp_conf)
+    ParserEngine::new(PARSER.clone(), tp_conf)
 });
 
 const _RE_FLAGS: &str = "imsux";
 
 /// Returns terminal definitions used by the grammar-language parser.
-pub fn get_terminals() -> Vec<Arc<TerminalDef>> {
+pub fn grammar_terminals() -> Vec<Arc<TerminalDef>> {
     let _regex: String = format!(r"/(?!/)(\\/|\\\\|[^/])*?/[{_RE_FLAGS}]*");
     let terminals = vec![
         terminal_def!("_COLON", ":", 27),
@@ -68,7 +68,7 @@ pub fn get_terminals() -> Vec<Arc<TerminalDef>> {
 }
 
 /// Returns grammar-language production rules.
-pub fn get_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
+pub fn grammar_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
     create_rules([
         ("start", vec!["_list"]),
         ("_list", vec!["_item", "_item _list"]),
@@ -129,25 +129,25 @@ pub fn get_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
 }
 
 /// Creates the parser frontend used for parsing grammar definitions.
-pub fn get_parser() -> Arc<ParserFrontend> {
+pub fn grammar_runtime() -> Arc<GrammarRuntime> {
     // TODO: Add _NL in ignore list
-    let parser_conf = Arc::new(ParserConf::new(
+    let parser_conf = Arc::new(GrammarRules::new(
         RULES.clone(),
         Vec::from(["WS".to_string(), "COMMENT".to_string()]),
     ));
     let lexer_conf = Arc::new(LexerConf::new(TERMINALS.to_vec()));
 
-    Arc::new(ParserFrontend::new(lexer_conf, parser_conf))
+    Arc::new(GrammarRuntime::new(lexer_conf, parser_conf))
 }
 
 /// Parses grammar text and transforms it into a runnable parser frontend.
 macro_rules! impl_load_grammar {
     ($( $extra_arg:ident : $extra_type:ty ),*) => {
         /// Loads a grammar definition into a ready-to-use parser frontend.
-        pub fn load_grammar(grammar: &str, $( $extra_arg : $extra_type ),*) -> Result<Arc<ParserFrontend>, ParserError> {
-            let tree = GRAMMAR_BUILDER
+        pub fn load_grammar(grammar: &str, $( $extra_arg : $extra_type ),*) -> Result<Arc<GrammarRuntime>, SwiftletError> {
+            let tree = GRAMMAR_PARSER
                 .parse(grammar)
-                .map_err(|e| ParserError::GrammarParseError(e.to_string()))?;
+                .map_err(|e| GrammarError::Parse(e.to_string()))?;
             $(
                 if $extra_arg.debug {
                     println!("\nAST of Grammar");
@@ -159,7 +159,7 @@ macro_rules! impl_load_grammar {
 
             let common_terminals = get_common_terminals();
             let imported_terminals = tree
-                .get_child_tree("import")
+                .trees_named("import")
                 .map(|imports| {
                     imports
                         .iter()
@@ -168,7 +168,7 @@ macro_rules! impl_load_grammar {
                 })
                 .unwrap_or_default();
 
-            let mut terminals = if let Some(terminals) = tree.get_child_tree("term") {
+            let mut terminals = if let Some(terminals) = tree.trees_named("term") {
                 let known_terminals = imported_terminals
                     .iter()
                     .filter_map(|name| {
@@ -198,7 +198,7 @@ macro_rules! impl_load_grammar {
                 }
             };
 
-            let ignores: Vec<String> = match tree.get_child_tree("ignore") {
+            let ignores: Vec<String> = match tree.trees_named("ignore") {
                 Some(ignores) => {
                     ignores
                     .iter()
@@ -211,10 +211,10 @@ macro_rules! impl_load_grammar {
             ignores.iter().for_each(&mut update_terminals);
 
             imported_terminals.iter().for_each(&mut update_terminals);
-            let Some(rules) = tree.get_child_tree("rule") else {
-                return Err(ParserError::GrammarParseError(
+            let Some(rules) = tree.trees_named("rule") else {
+                return Err(GrammarError::Parse(
                     "grammar does not contain any rule definitions".to_string(),
-                ));
+                ).into());
             };
 
             let mut transformer = RuleCompiler::new();
@@ -263,16 +263,16 @@ macro_rules! impl_load_grammar {
                 }
             )*
 
-            let parser_conf = Arc::new(ParserConf::new(rules, ignores));
+            let parser_conf = Arc::new(GrammarRules::new(rules, ignores));
             let lexer_conf = Arc::new(LexerConf::new(terminals));
 
-            Ok(Arc::new(ParserFrontend::new(lexer_conf, parser_conf)))
+            Ok(Arc::new(GrammarRuntime::new(lexer_conf, parser_conf)))
         }
     };
 }
 
 #[cfg(feature = "debug")]
-impl_load_grammar!(parser_option: Arc<ParserOption>);
+impl_load_grammar!(parser_option: Arc<ParserConfig>);
 
 #[cfg(not(feature = "debug"))]
 impl_load_grammar!();
@@ -298,8 +298,8 @@ mod tests {
             fn $fn_name() {
                 let text = normalize_grammar($grammar);
                 let left = $left;
-                if let Ok(ast) = GRAMMAR_BUILDER.parse(&text) {
-                    let right = ast.get_text();
+                if let Ok(ast) = GRAMMAR_PARSER.parse(&text) {
+                    let right = ast.inline_text();
                     assert_eq!(left, right);
                 } else {
                     panic!("Failed to generate AST.");
@@ -439,15 +439,21 @@ mod tests {
     #[cfg(feature = "debug")]
     #[test]
     fn load_grammar_returns_error_instead_of_panicking_for_invalid_grammar() {
-        let parser_opt = Arc::new(ParserOption::default());
+        let parser_opt = Arc::new(ParserConfig::default());
         let result = load_grammar("start T", parser_opt);
-        assert!(matches!(result, Err(ParserError::GrammarParseError(_))));
+        assert!(matches!(
+            result,
+            Err(SwiftletError::Grammar(GrammarError::Parse(_)))
+        ));
     }
 
     #[cfg(not(feature = "debug"))]
     #[test]
     fn load_grammar_returns_error_instead_of_panicking_for_invalid_grammar() {
         let result = load_grammar("start T");
-        assert!(matches!(result, Err(ParserError::GrammarParseError(_))));
+        assert!(matches!(
+            result,
+            Err(SwiftletError::Grammar(GrammarError::Parse(_)))
+        ));
     }
 }

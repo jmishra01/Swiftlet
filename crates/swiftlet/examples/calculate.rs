@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::time::Instant;
 use swiftlet::preclude::*;
 
-fn calculate(ast: &AST) -> i32 {
+fn calculate(ast: &Ast) -> i32 {
     match ast {
-        AST::Token(token) => token.word().parse::<i32>().unwrap(),
-        AST::Tree(tree, children) => match tree.as_str() {
+        Ast::Token(token) => token.word().parse::<i32>().unwrap(),
+        Ast::Tree(tree, children) => match tree.as_str() {
             "start" | "expr" => calculate(&children[0]),
             "add" => calculate(&children[0]) + calculate(&children[2]),
             "sub" => calculate(&children[0]) - calculate(&children[2]),
@@ -27,8 +27,13 @@ fn main() {
         "#;
 
     let t1 = Instant::now();
-    let conf = Arc::new(ParserOption {algorithm: Algorithm::Earley, ..Default::default()});
-    let parser = Swiftlet::from_string(grammar, conf).expect("failed to get parser");
+    let conf = Arc::new(ParserConfig {
+        algorithm: Algorithm::Earley,
+        ..Default::default()
+    });
+    let parser = Swiftlet::from_str(grammar)
+        .map(|grammar| grammar.parser(conf))
+        .expect("failed to get parser");
     let text = "10 - 2 + 5 - 2";
 
     println!("T1 - {:?}", t1.elapsed());

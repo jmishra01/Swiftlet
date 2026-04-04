@@ -5,13 +5,13 @@ use std::sync::Arc;
 
 /// Stores grammar rules, ignore directives, and cached rule expansions.
 #[derive(Debug)]
-pub struct ParserConf {
+pub struct GrammarRules {
     rules: HashMap<Arc<Symbol>, Vec<Arc<Rule>>>,
     ignore_symbols: Arc<HashSet<Arc<Symbol>>>,
     all_expansions: Vec<Arc<Rule>>,
 }
 
-impl ParserConf {
+impl GrammarRules {
     /// Creates parser configuration with rule table and ignored terminal names.
     pub fn new(rules: HashMap<Arc<Symbol>, Vec<Arc<Rule>>>, ignores: Vec<String>) -> Self {
         let ignore_symbols = ignores
@@ -63,15 +63,15 @@ impl ParserConf {
 
 /// Bundles lexer and parser configuration for a compiled grammar.
 #[derive(Debug)]
-pub struct ParserFrontend {
+pub struct GrammarRuntime {
     lexer: Arc<LexerConf>,
-    parser: Arc<ParserConf>,
+    parser: Arc<GrammarRules>,
     ignore_terminals: Arc<[Arc<TerminalDef>]>,
 }
 
-impl ParserFrontend {
+impl GrammarRuntime {
     /// Creates a parser frontend with lexer and parser configurations.
-    pub(crate) fn new(lexer: Arc<LexerConf>, parser: Arc<ParserConf>) -> Self {
+    pub(crate) fn new(lexer: Arc<LexerConf>, parser: Arc<GrammarRules>) -> Self {
         let ignore_terminals = Arc::from(
             parser
                 .get_ignore_symbols()
@@ -89,11 +89,7 @@ impl ParserFrontend {
 
     /// Returns a tokenizer for `text` using cached ignored terminal symbols.
     pub(crate) fn tokenizer(&self, text: &str) -> Tokenizer {
-        self.lexer.tokenize(
-            text,
-            self.parser.get_ignore_symbols().clone(),
-            self.ignore_terminals.clone(),
-        )
+        self.lexer.tokenize(text, self.ignore_terminals.clone())
     }
 
     /// Returns the lexer configuration.
@@ -103,7 +99,7 @@ impl ParserFrontend {
     }
 
     /// Returns the parser configuration.
-    pub fn get_parser(&self) -> &Arc<ParserConf> {
+    pub fn get_parser(&self) -> &Arc<GrammarRules> {
         &self.parser
     }
 }
@@ -111,7 +107,7 @@ impl ParserFrontend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::grammar::RuleOption;
+    use crate::grammar::RuleMeta;
 
     fn sample_rule(origin: &str, expansion: &[&str]) -> Arc<Rule> {
         Arc::new(Rule::new(
@@ -120,7 +116,7 @@ mod tests {
                 .iter()
                 .map(|x| crate::lexer::get_symbol(x))
                 .collect(),
-            Arc::new(RuleOption::default()),
+            Arc::new(RuleMeta::default()),
             0,
         ))
     }
@@ -128,7 +124,7 @@ mod tests {
     #[test]
     fn parser_conf_crud_and_iteration_work() {
         let start_rule = sample_rule("start", &["expr"]);
-        let mut pc = ParserConf::new(
+        let mut pc = GrammarRules::new(
             HashMap::from([(
                 Arc::new(Symbol::NonTerminal("start".to_string())),
                 vec![start_rule],

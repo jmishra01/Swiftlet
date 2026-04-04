@@ -12,11 +12,13 @@ fn main() {
     "#;
     let text = "case when Sales then 'hello' else 'world' end";
 
-    let parse_opt = Arc::new(ParserOption {
+    let parse_opt = Arc::new(ParserConfig {
         debug: true,
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(g, parse_opt).unwrap();
+    let parser = Swiftlet::from_str(g)
+        .map(|grammar| grammar.parser(parse_opt))
+        .unwrap();
     match parser.parse(text) {
         Ok(parsed) => {
             println!("{} AST {}", "-".repeat(10), "-".repeat(10));

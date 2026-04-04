@@ -38,12 +38,12 @@ BODY: /.+/s
 "#;
 
 fn main() {
-    let parser_opt = Arc::new(ParserOption {
+    let parser_opt = Arc::new(ParserConfig {
         algorithm: Algorithm::Earley,
         debug: false,
         ..Default::default()
     });
-    match Swiftlet::from_string(GRAMMAR, parser_opt) {
+    match Swiftlet::from_str(GRAMMAR).map(|grammar| grammar.parser(parser_opt)) {
         Ok(parser) => {
             let texts = [
                 "GET /users?id=42&active=true HTTP/1.1\r\nHost: example.com\r\nAccept: application/json\r\n\r\n",

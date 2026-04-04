@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserConfig, Swiftlet};
 
 #[macro_use]
 mod common;
@@ -100,7 +100,6 @@ multi_test!(
     Algorithm::Earley
 );
 
-
 multi_test_multi_input_texts!(
     rule_clr_next_line,
     rule_earley_next_line,
@@ -186,6 +185,89 @@ multi_test!(
     %ignore WS
     "#,
     "3 + 10 - 5 + 20",
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+multi_test!(
+    rule_clr_common_numeric_terminals,
+    rule_earley_common_numeric_terminals,
+    r#"
+    s: integer ":" signed ":" negative ":" decimal
+    integer: INT
+    signed: SIGNED_INT
+    negative: N_INT
+    decimal: DECIMAL
+    %import (INT, SIGNED_INT, N_INT, DECIMAL)
+    "#,
+    "123:+42:- 9:12.34",
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+multi_test!(
+    rule_clr_common_word_and_quote_terminals,
+    rule_earley_common_word_and_quote_terminals,
+    r#"
+    s: name word lower upper text quoted
+    name: CNAME
+    word: WORD
+    lower: LCASE_LETTER
+    upper: UCASE_LETTER
+    text: STRING
+    quoted: QUOTE
+    %import (CNAME, WORD, LCASE_LETTER, UCASE_LETTER, STRING, QUOTE, WS)
+    %ignore WS
+    "#,
+    r#"swiftlet1 parser a Z "value" 'x'"#,
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+multi_test!(
+    rule_clr_common_digit_and_hex_terminals,
+    rule_earley_common_digit_and_hex_terminals,
+    r#"
+    s: DIGIT ":" HEXDIGIT
+    %import (DIGIT, HEXDIGIT)
+    "#,
+    "7:BEEF42",
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+multi_test!(
+    rule_clr_common_comment_and_newline_terminals,
+    rule_earley_common_comment_and_newline_terminals,
+    r#"
+    s: COMMENT _NL assignment _NL
+    assignment: key "=" value
+    key: CNAME
+    value: STRING
+    COMMENT: SH_COMMENT
+    _NL: NEWLINE
+    %import (CNAME, STRING, SH_COMMENT, NEWLINE, WS_INLINE)
+    %ignore WS_INLINE
+    "#,
+    "# service settings\nHOST=\"localhost\"\n",
+    "s",
+    Algorithm::CLR,
+    Algorithm::Earley
+);
+
+multi_test_multi_input_texts!(
+    rule_clr_common_cr_lf_terminals,
+    rule_earley_common_cr_lf_terminals,
+    r#"
+    s: line_end WORD
+    line_end: CR LF | LF
+    %import (CR, LF, WORD)
+    "#,
+    ["\r\nReady", "\nReady"],
     "s",
     Algorithm::CLR,
     Algorithm::Earley

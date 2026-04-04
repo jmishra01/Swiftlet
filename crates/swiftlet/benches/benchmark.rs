@@ -1,7 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserConfig, Swiftlet};
 
 const GRAMMAR_AND_TEXT: [(&str, &str); 4] = [
     (
@@ -68,7 +68,7 @@ const GRAMMAR_AND_TEXT: [(&str, &str); 4] = [
     %ignore WS
     "#,
         "CASE WHEN SUM(Sales) > 10 THEN 'Aggregate value is greater than 10' ELSE 'Aggregate value is less than or equals to 10' END",
-        )
+    ),
 ];
 
 fn bench_func(c: &mut Criterion) {
@@ -77,11 +77,13 @@ fn bench_func(c: &mut Criterion) {
         let clr_bench_name = format!("Grammar {} | CLR Parser", i);
         c.bench_function(clr_bench_name.as_str(), |b| {
             b.iter(|| {
-                let conf = Arc::new(ParserOption {
+                let conf = Arc::new(ParserConfig {
                     algorithm: Algorithm::CLR,
                     ..Default::default()
                 });
-                if let Ok(clr_parser) = Swiftlet::from_string(grammar, conf) {
+                if let Ok(clr_parser) =
+                    Swiftlet::from_str(grammar).map(|grammar| grammar.parser(conf))
+                {
                     let _ = clr_parser.parse(text);
                 }
             })
@@ -91,8 +93,10 @@ fn bench_func(c: &mut Criterion) {
         let earley_bench_name = format!("Grammar {} | EARLEY Parser", i);
         c.bench_function(earley_bench_name.as_str(), |b| {
             b.iter(|| {
-                let conf = Arc::new(ParserOption::default());
-                if let Ok(parser) = Swiftlet::from_string(grammar, conf) {
+                let conf = Arc::new(ParserConfig::default());
+                if let Ok(parser) =
+                    Swiftlet::from_str(grammar).map(|grammar| grammar.parser(conf))
+                {
                     let _ = parser.parse(text);
                 }
             })
