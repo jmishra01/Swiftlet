@@ -16,11 +16,11 @@ fn main() {
 
     let text = "apple 123 text word";
 
-    let conf = Arc::new(ParserOption {
+    let conf = Arc::new(ParserConfig {
         debug: true,
         ..Default::default()
     });
-    let parser = match Swiftlet::from_string(grammar, conf) {
+    let parser = match Swiftlet::from_str(grammar).map(|grammar| grammar.parser(conf)) {
         Ok(p) => p,
         Err(err) => panic!("{}", err),
     };

@@ -20,6 +20,7 @@ and developer-friendly framework for building custom parsers, interpreters, and 
   * Use cache, to further optimize parsing.
 * Canonical LR (CLR) parser is less powerful than an Earley parser, but it is fast and memory-efficient.
 * EBNF base grammar
+* Context-aware tokenization support, including parser-guided terminal selection for ambiguous token sets.
 * Builds a parse-tree (AST) based on the grammar.
 * Display each step of parser, when debug set true.
 * Line and column tracking.
@@ -59,7 +60,8 @@ fn main() {
         "#;
 
   let conf = Arc::new(ParserOption::default());
-  let parser = Swiftlet::from_string(grammar, conf).expect("failed to get parser");
+  let grammar = Swiftlet::from_str(grammar).expect("failed to load grammar");
+  let parser = grammar.parser(conf);
   let text = "10 - 2 + 5 - 2";
 
   match parser.parse(text) {
@@ -93,7 +95,6 @@ Total: 11
 ```
 
 **For more examples, please check examples folder.**
-
 
 ## Grammar reference
 Click [here](https://github.com/jmishra01/Swiftlet/blob/main/grammar_reference.md)

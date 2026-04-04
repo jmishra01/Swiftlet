@@ -1,13 +1,14 @@
+#[allow(unused_macros)]
 macro_rules! test_case {
     ($fn_name:ident, $grammar:expr, $text:expr, $start:expr, $algorithm:expr) => {
         #[test]
         fn $fn_name() {
-            let parser_opt = Arc::new(ParserOption {
+            let parser_opt = Arc::new(ParserConfig {
                 algorithm: $algorithm,
                 start: $start.to_string(),
                 ..Default::default()
             });
-            match Swiftlet::from_string($grammar, parser_opt) {
+            match Swiftlet::from_str($grammar).map(|grammar| grammar.parser(parser_opt)) {
                 Ok(parsed) => {
                     assert!(parsed.parse($text).is_ok());
                 }
@@ -19,16 +20,17 @@ macro_rules! test_case {
     };
 }
 
+#[allow(unused_macros)]
 macro_rules! test_case_multi_input_texts {
     ($fn_name:ident, $grammar:expr, $text:expr, $start:expr, $algorithm:expr) => {
         #[test]
         fn $fn_name() {
-            let parser_opt = Arc::new(ParserOption {
+            let parser_opt = Arc::new(ParserConfig {
                 algorithm: $algorithm,
                 start: $start.to_string(),
                 ..Default::default()
             });
-            match Swiftlet::from_string($grammar, parser_opt) {
+            match Swiftlet::from_str($grammar).map(|grammar| grammar.parser(parser_opt)) {
                 Ok(parsed) => {
                     for text in $text.iter() {
                         assert!(parsed.parse(text).is_ok(), "{:?} not parse.", text);
@@ -42,6 +44,7 @@ macro_rules! test_case_multi_input_texts {
     };
 }
 
+#[allow(unused_macros)]
 macro_rules! multi_test {
     ($fn_name_1:ident, $fn_name_2:ident, $grammar:expr, $text:expr, $start:expr, $algo1:expr, $algo2:expr) => {
         test_case!($fn_name_1, $grammar, $text, $start, $algo1);
@@ -50,6 +53,7 @@ macro_rules! multi_test {
     };
 }
 
+#[allow(unused_macros)]
 macro_rules! multi_test_multi_input_texts {
     ($fn_name_1:ident, $fn_name_2:ident, $grammar:expr, $text:expr, $start:expr, $algo1:expr, $algo2:expr) => {
         test_case_multi_input_texts!($fn_name_1, $grammar, $text, $start, $algo1);

@@ -23,12 +23,14 @@ fn main() {
     X: "x"
     "#;
 
-    let parser_opt = Arc::new(ParserOption {
+    let parser_opt = Arc::new(ParserConfig {
         start: "s".to_string(),
         debug: true,
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(g, parser_opt).expect("failed to build parser");
+    let parser = Swiftlet::from_str(g)
+        .map(|grammar| grammar.parser(parser_opt))
+        .expect("failed to build parser");
 
     let parsed = parser.parse("xaxb").expect("Failed to parse a text");
     parsed.pretty_print();

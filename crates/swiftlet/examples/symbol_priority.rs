@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserConfig, Swiftlet};
 fn main() {
     let text = r#"
         e: e "+" t | t
@@ -9,12 +9,14 @@ fn main() {
         %import WS
         %ignore WS
         "#;
-    let conf = Arc::new(ParserOption {
+    let conf = Arc::new(ParserConfig {
         algorithm: Algorithm::CLR,
         start: "e".to_string(),
         ..Default::default()
     });
-    let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
+    let text_parser = Swiftlet::from_str(text)
+        .map(|grammar| grammar.parser(conf))
+        .expect("failed to build parser");
     let ast = text_parser.parse("id*id+id");
     ast.unwrap().pretty_print();
 }

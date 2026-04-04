@@ -1,11 +1,11 @@
 use std::sync::Arc;
-use swiftlet::ast::AST;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::ast::Ast;
+use swiftlet::{ParserConfig, Swiftlet};
 
-fn transform(ast: &AST) -> Option<i32> {
+fn transform(ast: &Ast) -> Option<i32> {
     match ast {
-        AST::Token(token) => token.word().parse::<i32>().ok(),
-        AST::Tree(_, children) => {
+        Ast::Token(token) => token.word().parse::<i32>().ok(),
+        Ast::Tree(_, children) => {
             let mut r = 0;
             for i in children.iter() {
                 if let Some(n) = transform(i) {
@@ -27,9 +27,11 @@ fn main() {
         %ignore WS
         "#;
 
-    let conf = Arc::new(ParserOption::default());
+    let conf = Arc::new(ParserConfig::default());
 
-    let text_parser = Swiftlet::from_string(text, conf).expect("failed to build parser");
+    let text_parser = Swiftlet::from_str(text)
+        .map(|grammar| grammar.parser(conf))
+        .expect("failed to build parser");
 
     match text_parser.parse("1 + 2 + 3") {
         Ok(res) => {

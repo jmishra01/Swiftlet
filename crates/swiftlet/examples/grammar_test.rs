@@ -1,19 +1,27 @@
 use std::sync::Arc;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::preclude::*;
 
 fn main() {
     let grammar = r#"
-    start: expr
-    expr: "1"
-    %import WS
-    %ignore WS
-    "#;
+    s: e b e
+    e: ("w" | "x") b
+    b: f? "y"
+    f: "z""#;
 
-    let conf = Arc::new(ParserOption::default());
+    let conf = Arc::new(ParserConfig {
+        start: "s".to_string(),
+        debug: true,
+        algorithm: Algorithm::Earley,
+        ..Default::default()
+    });
 
-    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
-    let text = "1";
-    if let Ok(parsed) = parser.parse(text) {
-        parsed.pretty_print();
+    let parser = Swiftlet::from_str(grammar)
+        .map(|grammar| grammar.parser(conf))
+        .expect("failed to build parser");
+    // [wx]z?yz?y[wx]z?y
+    let text = "xyzyxy";
+    match parser.parse(text) {
+        Ok(parsed) => parsed.pretty_print(),
+        Err(e) => panic!("{}", e),
     }
 }

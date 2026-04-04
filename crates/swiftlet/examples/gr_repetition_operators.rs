@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserConfig, Swiftlet};
 
 fn main() {
     let grammar = r#"
@@ -9,8 +9,10 @@ fn main() {
 
     let math_expr = ["1+2", "1+2+3"];
 
-    let conf = Arc::new(ParserOption::default());
-    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
+    let conf = Arc::new(ParserConfig::default());
+    let parser = Swiftlet::from_str(grammar)
+        .map(|grammar| grammar.parser(conf))
+        .expect("failed to build parser");
     for expr in math_expr {
         match parser.parse(&expr) {
             Ok(ast) => {

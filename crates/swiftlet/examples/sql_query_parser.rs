@@ -1,16 +1,17 @@
 use std::sync::Arc;
 use std::time::Instant;
 use swiftlet::grammar::Algorithm;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserConfig, Swiftlet};
 
 fn parse_text(grammar: &str, text: &str) {
     let current = Instant::now();
-    let conf = Arc::new(ParserOption {
+    let conf = Arc::new(ParserConfig {
         algorithm: Algorithm::CLR,
-        debug: true,
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
+    let parser = Swiftlet::from_str(grammar)
+        .map(|grammar| grammar.parser(conf))
+        .expect("failed to build parser");
     let parsed = parser.parse(text);
     println!("Time elapsed: {:?}", current.elapsed());
     match parsed {

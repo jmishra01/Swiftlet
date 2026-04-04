@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserConfig, Swiftlet};
 
 fn main() {
     let grammar = r#"
@@ -14,17 +14,32 @@ fn main() {
 
     let text = "3 + 10 - 5 + 20";
 
-    let conf = Arc::new(ParserOption {
+    let conf = Arc::new(ParserConfig {
         algorithm: Algorithm::Earley,
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
+    let parser = Swiftlet::from_str(grammar)
+        .map(|grammar| grammar.parser(conf))
+        .expect("failed to build parser");
     let parsed_text = parser.parse(&text);
 
     match parsed_text {
         Ok(tree) => {
             println!("AST");
             tree.pretty_print();
+            /*
+            start
+              add
+                sub
+                  add
+                    expr  3
+                    +
+                    10
+                  -
+                  5
+                +
+                20
+             */
         }
         Err(e) => {
             println!("Error: {}", e);

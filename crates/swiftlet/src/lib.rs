@@ -6,12 +6,12 @@
 //! use std::sync::Arc;
 //!
 //!
-//! fn calculate(ast: &AST) -> i32 {
+//! fn calculate(ast: &Ast) -> i32 {
 //!     match ast {
-//!         AST::Token(token) => {
+//!         Ast::Token(token) => {
 //!             token.word().parse::<i32>().unwrap()
 //!         }
-//!         AST::Tree(tree, children) => {
+//!         Ast::Tree(tree, children) => {
 //!             match tree.as_str() {
 //!                 "start" | "expr" => calculate(&children[0]),
 //!                 "add" => calculate(&children[0]) + calculate(&children[2]),
@@ -34,8 +34,9 @@
 //!         %ignore WS
 //!         "#;
 //!
-//!     let conf = Arc::new(ParserOption::default());
-//!     let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
+//!     let conf = Arc::new(ParserConfig::default());
+//!     let swiftlet = Swiftlet::from_str(grammar).expect("failed to load grammar");
+//!     let parser = swiftlet.parser(conf);
 //!     let text = "10 - 2 + 5 - 2";
 //!
 //!     match parser.parse(text) {
@@ -50,7 +51,7 @@
 //! }
 //! ```
 pub mod ast;
-mod builder;
+mod engine;
 mod common;
 pub mod error;
 pub mod grammar;
@@ -62,12 +63,12 @@ pub mod parser_frontends;
 pub mod preclude;
 mod transform;
 
-use crate::ast::AST;
-pub use crate::builder::GrammarBuilder;
+use crate::ast::Ast;
+pub use crate::engine::ParserEngine;
 use crate::grammar::Algorithm;
-use crate::lexer::Token;
 use crate::load_grammar::load_grammar;
-use error::ParserError;
+use crate::parser_frontends::GrammarRuntime;
+use error::SwiftletError;
 use std::sync::Arc;
 
 /// Ambiguity Enum
@@ -80,101 +81,82 @@ pub enum Ambiguity {
     Explicit,
 }
 
-/// Controls how the parser obtains terminals from input text.
-#[derive(Clone, Debug)]
-pub enum LexerMode {
-    /// Use the current global tokenizer before parsing.
-    Basic,
-    /// Let the Earley parser request only the terminals expected at each position.
-    Dynamic,
-    /// Parse terminals directly inside Earley without relying on the pre-tokenized stream.
-    Scannerless,
-}
-
 /// Configures parser construction and runtime behavior.
 #[derive(Debug, Clone)]
-pub struct ParserOption {
+pub struct ParserConfig {
     pub start: String,
     pub algorithm: Algorithm,
     pub ambiguity: Ambiguity,
-    pub lexer_mode: LexerMode,
     pub debug: bool,
 }
 
-impl Default for ParserOption {
+impl Default for ParserConfig {
     /// Returns default parser options used by `Swiftlet`.
     fn default() -> Self {
         Self {
             start: "start".to_string(),
             algorithm: Algorithm::Earley,
             ambiguity: Ambiguity::Resolve,
-            lexer_mode: LexerMode::Basic,
             debug: false,
         }
     }
 }
 
-/// High-level parser entry point built from a grammar definition.
+fn normalize_grammar(grammar: &str) -> String {
+    format!(
+        r#"{}
+        "#,
+        grammar.trim()
+    )
+}
+
+/// Reusable loaded grammar that can build multiple parser instances.
 pub struct Swiftlet {
-    grammar_builder: GrammarBuilder,
+    frontend: Arc<GrammarRuntime>,
 }
 
 impl Swiftlet {
-    /// Constructs a parser from grammar text.
-    pub fn from_string(
-        grammar: &str,
-        parser_option: Arc<ParserOption>,
-    ) -> Result<Self, ParserError> {
+    /// Loads and validates a grammar from inline text.
+    pub fn from_str(grammar: &str) -> Result<Self, SwiftletError> {
+        let grammar = normalize_grammar(grammar);
+
         #[cfg(feature = "debug")]
-        let _grammar = match load_grammar(grammar, parser_option.clone()) {
-            Ok(g) => g,
-            Err(err) => return Err(err),
-        };
+        let frontend = load_grammar(&grammar, Arc::new(ParserConfig::default()))?;
 
         #[cfg(not(feature = "debug"))]
-        let _grammar = match load_grammar(grammar) {
-            Ok(g) => g,
-            Err(err) => return Err(err),
-        };
+        let frontend = load_grammar(&grammar)?;
 
-        Ok(Self {
-            grammar_builder: GrammarBuilder::new(_grammar, parser_option.clone()),
-        })
+        Ok(Self { frontend })
     }
 
-    /// Constructs a parser from a grammar file path.
-    ///
-    /// Panics if the file cannot be read.
-    pub fn from_file(file: String, parser_option: Arc<ParserOption>) -> Result<Self, ParserError> {
-        let content = std::fs::read_to_string(file).unwrap();
-        Self::from_string(content.as_str(), parser_option)
+    /// Loads and validates a grammar from a file path.
+    pub fn from_file(path: &str) -> Result<Self, SwiftletError> {
+        let content = std::fs::read_to_string(path).map_err(|source| {
+            SwiftletError::GrammarFileReadError {
+                path: path.to_string(),
+                source,
+            }
+        })?;
+
+        Self::from_str(&content)
     }
 
-    /// Parses the provided input text and returns the generated AST.
-    pub fn parse(&self, text: &str) -> Result<AST, ParserError> {
-        self.grammar_builder.parse(text)
-    }
-
-    /// Tokenizes input text and returns the resulting token stream.
-    pub fn tokens(&self, text: &str) -> Result<Vec<Token>, ParserError> {
-        self.grammar_builder.tokens(text)
-    }
-
-    /// Prints a readable debug view of the token stream for `text`.
-    pub fn print_tokens(&self, text: &str) -> Result<(), ParserError> {
-        for token in self.tokens(text)? {
-            println!("{}", format_token_debug(&token));
+    /// Builds a parser instance for the given parser options.
+    pub fn parser(&self, parser_option: Arc<ParserConfig>) -> Parser {
+        Parser {
+            parser_engine: ParserEngine::new(self.frontend.clone(), parser_option),
         }
-        Ok(())
     }
 }
 
-fn format_token_debug(token: &Token) -> String {
-    format!(
-        "{} -> {:?} @ {}..{}",
-        token.get_terminal(),
-        token.word(),
-        token.get_start(),
-        token.get_end()
-    )
+/// Parser instance built from a validated Swiftlet grammar plus parser options.
+pub struct Parser {
+    parser_engine: ParserEngine,
+}
+
+impl Parser {
+    /// Parses the provided input text and returns the generated AST.
+    pub fn parse(&self, text: &str) -> Result<Ast, SwiftletError> {
+        self.parser_engine.parse(text)
+    }
 }

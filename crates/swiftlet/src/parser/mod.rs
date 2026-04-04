@@ -1,7 +1,7 @@
-use crate::ast::AST;
-use crate::error::ParserError;
+use crate::ast::Ast;
+use crate::error::SwiftletError;
 use crate::lexer::Tokenizer;
-use crate::parser_frontends::ParserFrontend;
+use crate::parser_frontends::GrammarRuntime;
 use std::sync::Arc;
 
 pub mod clr;
@@ -9,10 +9,10 @@ pub mod earley;
 mod utils;
 
 /// Common interface implemented by concrete parser backends.
-pub trait Parser {
+pub trait ParserBackend {
     /// Returns parser frontend containing lexer and grammar configuration.
-    fn get_parser_frontend(&self) -> Arc<ParserFrontend>;
+    fn get_parser_frontend(&self) -> Arc<GrammarRuntime>;
 
     /// Parses token stream into AST.
-    fn parse(&self, token: Tokenizer) -> Result<AST, ParserError>;
+    fn parse(&self, token: &mut Tokenizer) -> Result<Ast, SwiftletError>;
 }

@@ -2,41 +2,55 @@ use std::sync::Arc;
 use swiftlet::preclude::*;
 
 const GRAMMAR: &str = r#"
-start: request
+start: message
 
-request: get_request
-    | post_request
+message: request
+    | response
 
-get_request: request_line_get headers NEWLINE
-post_request: request_line_post headers NEWLINE body?
+request: request_line header_section CRLF message_body?
+response: status_line header_section CRLF message_body?
 
-request_line_get: "GET" SP REQUEST_TARGET SP HTTP_VERSION NEWLINE
-request_line_post: "POST" SP REQUEST_TARGET SP HTTP_VERSION NEWLINE
+request_line: method SP request_target SP http_version CRLF
+status_line: http_version SP status_code SP reason_phrase CRLF
 
-headers: HEADER_LINE*
-body: JSON_BODY
+header_section: (header_line CRLF)*
+header_line: field_name ":" field_value?
 
-REQUEST_TARGET: /\/[^\r\n ]*/
-HTTP_VERSION: /HTTP\/(1\.0|1\.1|2\.0)/
+method: METHOD
+request_target: REQUEST_TARGET
+http_version: HTTP_VERSION
+status_code: STATUS_CODE
+reason_phrase: REASON_PHRASE
+field_name: TOKEN
+field_value: FIELD_VALUE
+message_body: BODY
+
+CRLF: /\r\n/
 SP: " "
-HEADER_LINE: /[A-Za-z][A-Za-z0-9-]*: [^\r\n]*\r?\n/
-JSON_BODY: /\{[\s\S]*\}/
-NEWLINE: /\r?\n/
+METHOD: /(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE|CONNECT)/
+HTTP_VERSION: /HTTP\/\d\.\d/
+STATUS_CODE: /\d{3}/
+REQUEST_TARGET: /[^ \t\r\n]+/
+REASON_PHRASE: /[^\r\n]+/
+TOKEN: /[!#$%&'*+.^_`|~0-9A-Za-z-]+/
+FIELD_VALUE: /[ \t]*[^\r\n]+/
+BODY: /.+/s
 "#;
 
 fn main() {
-    let parser_opt = Arc::new(ParserOption {
+    let parser_opt = Arc::new(ParserConfig {
         algorithm: Algorithm::Earley,
         debug: false,
         ..Default::default()
     });
-    match Swiftlet::from_string(GRAMMAR, parser_opt) {
+    match Swiftlet::from_str(GRAMMAR).map(|grammar| grammar.parser(parser_opt)) {
         Ok(parser) => {
             let texts = [
                 "GET /users?id=42&active=true HTTP/1.1\r\nHost: example.com\r\nAccept: application/json\r\n\r\n",
                 "POST /api/messages HTTP/1.1\r\nHost: example.com\r\nContent-Type: application/json\r\nContent-Length: 17\r\n\r\n{\"message\":\"hi\"}",
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 5\r\n\r\nhello",
             ];
-            let prefix_text = "HTTP request: ";
+            let prefix_text = "HTTP message: ";
             texts.into_iter().for_each(|text| {
                 println!("{}", "-".repeat(text.len() + prefix_text.len()));
                 println!("{}{}", prefix_text, text);

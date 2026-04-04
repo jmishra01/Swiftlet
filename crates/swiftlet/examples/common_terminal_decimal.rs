@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use swiftlet::{ParserOption, Swiftlet, grammar::Algorithm};
+use swiftlet::{ParserConfig, Swiftlet, grammar::Algorithm};
 
 fn main() {
     let grammar = r#"
@@ -12,12 +12,14 @@ fn main() {
 
     let text = "12.34 + 10";
 
-    let conf = Arc::new(ParserOption {
+    let conf = Arc::new(ParserConfig {
         algorithm: Algorithm::CLR,
         debug: true,
         ..Default::default()
     });
-    let parser = Swiftlet::from_string(grammar, conf).expect("failed to build parser");
+    let parser = Swiftlet::from_str(grammar)
+        .map(|grammar| grammar.parser(conf))
+        .expect("failed to build parser");
     match parser.parse(&text) {
         Ok(ast) => {
             ast.print()

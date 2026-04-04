@@ -10,6 +10,7 @@ It accepts an EBNF-style grammar and parses input text into a tree of `Tree` and
 - Choose the parsing algorithm with `earley` or `clr`.
 - Control ambiguity handling with `resolve` or `explicit`.
 - Inspect the parse result as `Tree` and `Token` objects from Python.
+- Context-aware tokenization support, including parser-guided terminal selection for ambiguous token sets.
 
 ## Installation
 

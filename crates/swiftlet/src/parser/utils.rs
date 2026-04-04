@@ -22,7 +22,7 @@ pub fn dot_state(rule: &Arc<Rule>, dot: usize) -> (String, String, String) {
 
 #[cfg(test)]
 mod tests {
-    use crate::grammar::{Rule, RuleOption};
+    use crate::grammar::{Rule, RuleMeta};
     use crate::lexer::Symbol;
     use crate::parser::utils::dot_state;
     use crate::{non_terms, terms};
@@ -33,7 +33,7 @@ mod tests {
         let rules = Arc::new(Rule::new(
             non_terms!("expr".to_string()),
             vec![non_terms!("expr"), terms!("id")],
-            Arc::from(RuleOption::default()),
+            Arc::from(RuleMeta::default()),
             0,
         ));
         rules

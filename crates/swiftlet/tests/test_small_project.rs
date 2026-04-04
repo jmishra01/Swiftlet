@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserConfig, Swiftlet};
 
 #[macro_use]
 mod common;

@@ -1,17 +1,17 @@
 use crate::grammar::Rule;
-use crate::lexer::{LexerConf, Symbol, Tokenizer};
+use crate::lexer::{LexerConf, Symbol, TerminalDef, Tokenizer};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Stores grammar rules, ignore directives, and cached rule expansions.
 #[derive(Debug)]
-pub struct ParserConf {
+pub struct GrammarRules {
     rules: HashMap<Arc<Symbol>, Vec<Arc<Rule>>>,
     ignore_symbols: Arc<HashSet<Arc<Symbol>>>,
     all_expansions: Vec<Arc<Rule>>,
 }
 
-impl ParserConf {
+impl GrammarRules {
     /// Creates parser configuration with rule table and ignored terminal names.
     pub fn new(rules: HashMap<Arc<Symbol>, Vec<Arc<Rule>>>, ignores: Vec<String>) -> Self {
         let ignore_symbols = ignores
@@ -51,8 +51,8 @@ impl ParserConf {
     }
 
     /// Returns all rule expansions from the grammar.
-    pub fn get_all_expansion(&self) -> Vec<Arc<Rule>> {
-        self.all_expansions.clone()
+    pub fn get_all_expansion(&self) -> &[Arc<Rule>] {
+        &self.all_expansions
     }
 
     /// Returns all rules for the specified symbol, if present.
@@ -63,21 +63,33 @@ impl ParserConf {
 
 /// Bundles lexer and parser configuration for a compiled grammar.
 #[derive(Debug)]
-pub struct ParserFrontend {
+pub struct GrammarRuntime {
     lexer: Arc<LexerConf>,
-    parser: Arc<ParserConf>,
+    parser: Arc<GrammarRules>,
+    ignore_terminals: Arc<[Arc<TerminalDef>]>,
 }
 
-impl ParserFrontend {
+impl GrammarRuntime {
     /// Creates a parser frontend with lexer and parser configurations.
-    pub(crate) fn new(lexer: Arc<LexerConf>, parser: Arc<ParserConf>) -> Self {
-        Self { lexer, parser }
+    pub(crate) fn new(lexer: Arc<LexerConf>, parser: Arc<GrammarRules>) -> Self {
+        let ignore_terminals = Arc::from(
+            parser
+                .get_ignore_symbols()
+                .iter()
+                .filter_map(|symbol| lexer.get_terminal_def(symbol).cloned())
+                .collect::<Vec<_>>(),
+        );
+
+        Self {
+            lexer,
+            parser,
+            ignore_terminals,
+        }
     }
 
     /// Returns a tokenizer for `text` using cached ignored terminal symbols.
     pub(crate) fn tokenizer(&self, text: &str) -> Tokenizer {
-        self.lexer
-            .tokenize(text, self.parser.get_ignore_symbols().clone())
+        self.lexer.tokenize(text, self.ignore_terminals.clone())
     }
 
     /// Returns the lexer configuration.
@@ -87,7 +99,7 @@ impl ParserFrontend {
     }
 
     /// Returns the parser configuration.
-    pub fn get_parser(&self) -> &Arc<ParserConf> {
+    pub fn get_parser(&self) -> &Arc<GrammarRules> {
         &self.parser
     }
 }
@@ -95,8 +107,7 @@ impl ParserFrontend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::grammar::RuleOption;
-    use crate::lexer::{RegexFlag, TerminalDef};
+    use crate::grammar::RuleMeta;
 
     fn sample_rule(origin: &str, expansion: &[&str]) -> Arc<Rule> {
         Arc::new(Rule::new(
@@ -105,7 +116,7 @@ mod tests {
                 .iter()
                 .map(|x| crate::lexer::get_symbol(x))
                 .collect(),
-            Arc::new(RuleOption::default()),
+            Arc::new(RuleMeta::default()),
             0,
         ))
     }
@@ -113,7 +124,7 @@ mod tests {
     #[test]
     fn parser_conf_crud_and_iteration_work() {
         let start_rule = sample_rule("start", &["expr"]);
-        let mut pc = ParserConf::new(
+        let mut pc = GrammarRules::new(
             HashMap::from([(
                 Arc::new(Symbol::NonTerminal("start".to_string())),
                 vec![start_rule],
@@ -136,22 +147,5 @@ mod tests {
         assert_eq!(pc.next_expansion(&expr).count(), 1);
         assert_eq!(pc.get_all_expansion().len(), 2);
         assert_eq!(pc.get_expansion(&expr).unwrap().len(), 1);
-    }
-
-    #[test]
-    fn parser_frontend_exposes_lexer_and_parser() {
-        let pc = Arc::new(ParserConf::new(HashMap::new(), vec![]));
-        let lx = Arc::new(LexerConf::new(vec![Arc::new(TerminalDef::with_regex(
-            "INT",
-            r"\d+",
-            RegexFlag::default(),
-            0,
-        ))]));
-        let pf = ParserFrontend::new(lx.clone(), pc.clone());
-
-        let mut tk = pf.tokenizer("42");
-        assert_eq!(tk.next().unwrap().word(), "42");
-        assert!(Arc::ptr_eq(pf.get_parser(), &pc));
-        assert!(Arc::ptr_eq(&pf.get_lexer(), &lx));
     }
 }

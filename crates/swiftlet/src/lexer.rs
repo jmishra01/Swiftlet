@@ -1,6 +1,6 @@
-use crate::error::ParserError;
+use crate::error::SwiftletError;
 use fancy_regex::{Regex, RegexBuilder};
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
@@ -188,7 +188,7 @@ impl PartialEq for TerminalDef {
 }
 
 /// Stores a concrete token slice and its source location metadata.
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Token {
     source: Arc<str>,
     start: usize,
@@ -267,6 +267,14 @@ impl PartialEq for Token {
 
 impl Eq for Token {}
 
+/// Stores a side-effect-free token probe together with the tokenizer state after commit.
+#[derive(Clone, Debug)]
+pub(crate) struct TokenMatch {
+    pub(crate) token: Arc<Token>,
+    pub(crate) next_start: usize,
+    pub(crate) next_line: usize,
+}
+
 /// Tokenizes input text using the configured terminal definitions.
 #[derive(Debug, Clone)]
 pub struct Tokenizer {
@@ -274,31 +282,49 @@ pub struct Tokenizer {
     start: usize,
     line: usize,
     len: usize,
-    terminals: Vec<Arc<TerminalDef>>,
-    ignore: Arc<HashSet<Arc<Symbol>>>,
+    sym_terminal_def: Arc<HashMap<Arc<Symbol>, Arc<TerminalDef>>>,
+    ignore_terminals: Arc<[Arc<TerminalDef>]>,
 }
 
 impl Tokenizer {
     /// Creates a tokenizer from input text, terminal definitions, and ignored terminal symbols.
     pub(crate) fn new(
         text: Arc<str>,
-        terminals: &[Arc<TerminalDef>],
-        ignore: Arc<HashSet<Arc<Symbol>>>,
+        sym_terminal_def: Arc<HashMap<Arc<Symbol>, Arc<TerminalDef>>>,
+        ignore_terminals: Arc<[Arc<TerminalDef>]>,
     ) -> Self {
         let len = text.len();
+
         Self {
             text,
             start: 0usize,
             line: 0usize,
             len,
-            terminals: terminals.to_owned(),
-            ignore,
+            sym_terminal_def,
+            ignore_terminals,
         }
+    }
+
+    pub(crate) fn get_start(&self) -> usize {
+        self.start
+    }
+
+    pub(crate) fn get_line_column(&self) -> (usize, usize) {
+        self.line_column(self.start)
+    }
+
+    pub(crate) fn get_terminal_def(&self, name: &Arc<Symbol>) -> Option<&Arc<TerminalDef>> {
+        self.sym_terminal_def.get(name)
     }
 
     /// Returns the original tokenizer input text.
     pub(crate) fn get_text(&self) -> &str {
         &self.text
+    }
+
+    pub(crate) fn commit_token_match(&mut self, token_match: &TokenMatch) {
+        self.start = token_match.next_start;
+        self.line = token_match.next_line;
     }
 
     fn line_column(&self, location: usize) -> (usize, usize) {
@@ -312,154 +338,89 @@ impl Tokenizer {
         (line, column)
     }
 
-    /// Produces the next token or a structured tokenization error.
-    pub fn next_token(&mut self) -> Result<Option<Arc<Token>>, ParserError> {
-        if self.start < self.len {
-            let slice_text = &self.text[self.start..];
+    pub(crate) fn peek_token_with_next_symbol(
+        &self,
+        next_symbols: &Arc<Symbol>,
+    ) -> Result<Option<TokenMatch>, SwiftletError> {
+        let Some(terminal) = self.sym_terminal_def.get(next_symbols) else {
+            return Ok(None);
+        };
 
-            let previous_start = self.start;
+        let mut start = self.start;
+        let mut line = self.line;
 
-            for terminal in self.terminals.iter() {
-                if let Some((mt_end, mt_len)) = terminal.capture(slice_text) {
-                    return if !self.ignore.contains(&terminal.name) {
-                        let token = Arc::new(Token::new(
-                            self.text.clone(),
-                            self.start,
-                            mt_end + self.start,
-                            self.line,
-                            terminal.name.clone(),
-                        ));
+        while start < self.len {
+            let slice_text = &self.text[start..];
 
-                        if terminal.name.as_ref().as_str() == "_NL" {
-                            self.line += 1;
-                            if self.start == 0 {
-                                self.start += mt_end;
-                                return self.next_token();
-                            }
-                        }
-                        self.start += mt_len;
+            if let Some((mt_end, _)) = terminal.capture(slice_text) {
+                let next_line = if terminal.name.as_ref().as_str() == "_NL" {
+                    line + 1
+                } else {
+                    line
+                };
+                return Ok(Some(TokenMatch {
+                    token: Arc::new(Token::new(
+                        self.text.clone(),
+                        start,
+                        start + mt_end,
+                        line,
+                        terminal.name.clone(),
+                    )),
+                    next_start: start + mt_end,
+                    next_line,
+                }));
+            }
 
-                        Ok(Some(token))
-                    } else {
-                        self.start += mt_end;
-                        self.next_token()
-                    };
+            let mut ignored = false;
+            for term_def in self.ignore_terminals.iter() {
+                if let Some((mt_end, _)) = term_def.pattern.capture(slice_text) {
+                    if term_def.name.as_ref().as_str() == "_NL" {
+                        line += 1;
+                    }
+                    start += mt_end;
+                    ignored = true;
+                    break;
                 }
             }
 
-            if previous_start == self.start {
-                let expected_next_token = self
-                    .terminals
-                    .iter()
-                    .map(|x| match x.pattern.clone() {
-                        Pattern::PatternRegex(_) => x.get_name().as_ref().as_str().to_string(),
-                        Pattern::PatternStr(name) => name,
-                    })
-                    .collect::<Vec<String>>();
-                let (line, column) = self.line_column(previous_start);
-
-                return Err(ParserError::TokenizationError {
-                    location: previous_start,
-                    line,
-                    column,
-                    expected: expected_next_token,
-                    text: self.text.to_string(),
-                    caret: format!("{}^", " ".repeat(previous_start)),
-                });
+            if !ignored {
+                return Ok(None);
             }
         }
+
         Ok(None)
-    }
-}
-
-impl Iterator for Tokenizer {
-    type Item = Arc<Token>;
-
-    /// Produces the next token matched at the current cursor.
-    ///
-    /// Panics when no terminal matches the current input position.
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next_token().unwrap()
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct LexerConf {
-    pub terminals: Vec<Arc<TerminalDef>>,
+    sym_terminal_def: Arc<HashMap<Arc<Symbol>, Arc<TerminalDef>>>,
 }
 
 impl LexerConf {
     /// Creates lexer configuration from terminal definitions.
     pub fn new(terminals: Vec<Arc<TerminalDef>>) -> Self {
-        Self { terminals }
+        let it = terminals
+            .iter()
+            .map(|terminal_def| (terminal_def.name.clone(), terminal_def.clone()));
+        let sym_terminal_def = HashMap::from_iter(it);
+
+        Self {
+            sym_terminal_def: Arc::new(sym_terminal_def),
+        }
+    }
+
+    pub(crate) fn get_terminal_def(&self, name: &Arc<Symbol>) -> Option<&Arc<TerminalDef>> {
+        self.sym_terminal_def.get(name)
     }
 
     /// Creates a tokenizer over `text` with a provided ignore-symbol set.
-    pub fn tokenize(&self, text: &str, ignore: Arc<HashSet<Arc<Symbol>>>) -> Tokenizer {
-        Tokenizer::new(Arc::<str>::from(text), &self.terminals, ignore)
-    }
-
-    /// Returns the next non-ignored byte offset from `start`.
-    pub(crate) fn skip_ignored(
-        &self,
-        text: &str,
-        mut start: usize,
-        ignore: &HashSet<Arc<Symbol>>,
-    ) -> usize {
-        while start < text.len() {
-            let slice_text = &text[start..];
-            let mut advanced = false;
-            for terminal in self.terminals.iter() {
-                if ignore.contains(&terminal.name)
-                    && let Some((mt_end, _)) = terminal.capture(slice_text)
-                {
-                    start += mt_end;
-                    advanced = true;
-                    break;
-                }
-            }
-            if !advanced {
-                break;
-            }
-        }
-        start
-    }
-
-    /// Attempts to match the expected terminal symbol at `start`, after skipping ignored input.
-    pub(crate) fn match_terminal(
-        &self,
-        text: &str,
-        start: usize,
-        expected: &Arc<Symbol>,
-        ignore: &HashSet<Arc<Symbol>>,
-    ) -> Option<Arc<Token>> {
-        let start = self.skip_ignored(text, start, ignore);
-        if start >= text.len() {
-            return None;
-        }
-
-        let slice_text = &text[start..];
-        let line = text[..start].chars().filter(|ch| *ch == '\n').count();
-
-        for terminal in self.terminals.iter() {
-            if &terminal.name == expected
-                && let Some((mt_end, _)) = terminal.capture(slice_text)
-            {
-                return Some(Arc::new(Token::new(
-                    Arc::<str>::from(text),
-                    start,
-                    start + mt_end,
-                    line,
-                    terminal.name.clone(),
-                )));
-            }
-
-            // Terminals are sorted; once we pass the expected symbol there's nothing else to match.
-            if &terminal.name == expected {
-                break;
-            }
-        }
-        None
+    pub fn tokenize(&self, text: &str, ignore_terminals: Arc<[Arc<TerminalDef>]>) -> Tokenizer {
+        Tokenizer::new(
+            Arc::<str>::from(text),
+            self.sym_terminal_def.clone(),
+            ignore_terminals,
+        )
     }
 }
 
@@ -609,64 +570,6 @@ mod tests {
         assert_eq!(lhs, same);
         assert_ne!(lhs, different_line);
         assert_ne!(lhs, different_terminal);
-    }
-
-    #[test]
-    fn tokenizer_and_lexer_conf_tokenize_with_ignore() {
-        let terminals = vec![
-            Arc::new(TerminalDef::with_regex(
-                "_NL",
-                r"\n+",
-                RegexFlag::default(),
-                0,
-            )),
-            Arc::new(TerminalDef::with_regex(
-                "WS",
-                r"[ ]+",
-                RegexFlag::default(),
-                0,
-            )),
-            Arc::new(TerminalDef::with_regex(
-                "INT",
-                r"\d+",
-                RegexFlag::default(),
-                0,
-            )),
-        ];
-
-        let lexer = LexerConf::new(terminals);
-        let mut tokenizer = lexer.tokenize(
-            "12 34\n56",
-            Arc::new(
-                [
-                    Arc::new(Symbol::Terminal("WS".to_string())),
-                    Arc::new(Symbol::Terminal("_NL".to_string())),
-                ]
-                .into_iter()
-                .collect(),
-            ),
-        );
-        let words = tokenizer
-            .by_ref()
-            .map(|x| x.word().to_string())
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            words,
-            vec!["12".to_string(), "34".to_string(), "56".to_string()]
-        );
-        assert_eq!(tokenizer.get_text(), "12 34\n56");
-    }
-
-    #[test]
-    fn tokenizer_panics_on_unmatched_input() {
-        let terminals = vec![Arc::new(TerminalDef::with_string("A", "a", 0))];
-        let mut tokenizer =
-            Tokenizer::new(Arc::<str>::from("x"), &terminals, Arc::new(HashSet::new()));
-        let panicked = std::panic::catch_unwind(move || {
-            let _ = tokenizer.next();
-        });
-        assert!(panicked.is_err());
     }
 
     #[test]

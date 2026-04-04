@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use swiftlet::grammar::Algorithm;
-use swiftlet::{ParserOption, Swiftlet};
+use swiftlet::{ParserConfig, Swiftlet};
 
 fn main() {
     let text = r#"
@@ -10,11 +10,13 @@ fn main() {
         %ignore WS
         "#;
 
-    let opt = Arc::new(ParserOption {
+    let opt = Arc::new(ParserConfig {
         algorithm: Algorithm::CLR,
         ..Default::default()
     });
-    let text_parser = Swiftlet::from_string(text, opt).expect("failed to build parser");
+    let text_parser = Swiftlet::from_str(text)
+        .map(|grammar| grammar.parser(opt))
+        .expect("failed to build parser");
 
     let parsed = text_parser.parse("1234 + 3953");
 
