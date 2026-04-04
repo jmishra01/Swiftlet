@@ -16,29 +16,15 @@ on:
 
 jobs:
   build:
-    name: Build wheels (${{ matrix.name }})
+    name: Build wheels
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: linux-x86_64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            manylinux: auto
-          - name: linux-aarch64
-            os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            manylinux: auto
-          - name: windows-x86_64
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - name: macos-x86_64
-            os: macos-14
-            target: x86_64-apple-darwin
-          - name: macos-arm64
-            os: macos-14
-            target: aarch64-apple-darwin
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-14
 
     steps:
       - name: Check out repository
@@ -54,15 +40,13 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           working-directory: pyswiftlet
-          target: ${{ matrix.target }}
           command: build
-          manylinux: ${{ matrix.manylinux || 'off' }}
           args: --release --interpreter python3.10 --out dist
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.name }}
+          name: wheels-${{ matrix.os }}
           path: pyswiftlet/dist/*.whl
 
   publish:
