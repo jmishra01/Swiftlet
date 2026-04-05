@@ -82,14 +82,11 @@ impl Rule {
 impl Display for Rule {
     /// Formats rule as `origin -> expansion...`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let lhs = self.origin.as_ref().as_str();
-        let rhs = self
-            .expansion
-            .iter()
-            .map(|x| x.as_ref().as_str().to_string())
-            .collect::<Vec<_>>();
-
-        write!(f, "{} -> {}", lhs, rhs.join(" "))
+        write!(f, "{} ->", self.origin.as_ref().as_str())?;
+        for sym in &self.expansion {
+            write!(f, " {}", sym.as_ref().as_str())?;
+        }
+        Ok(())
     }
 }
 

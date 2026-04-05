@@ -92,10 +92,10 @@ impl GrammarRuntime {
         self.lexer.tokenize(text, self.ignore_terminals.clone())
     }
 
-    /// Returns the lexer configuration.
+    /// Returns a reference to the lexer configuration (avoids Arc clone at call site).
     #[allow(dead_code)]
-    pub(crate) fn get_lexer(&self) -> Arc<LexerConf> {
-        self.lexer.clone()
+    pub(crate) fn get_lexer(&self) -> &Arc<LexerConf> {
+        &self.lexer
     }
 
     /// Returns the parser configuration.

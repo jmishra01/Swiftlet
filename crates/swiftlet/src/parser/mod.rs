@@ -10,8 +10,8 @@ mod utils;
 
 /// Common interface implemented by concrete parser backends.
 pub trait ParserBackend {
-    /// Returns parser frontend containing lexer and grammar configuration.
-    fn get_parser_frontend(&self) -> Arc<GrammarRuntime>;
+    /// Returns a reference to the parser frontend (avoids Arc clone at call site).
+    fn get_parser_frontend(&self) -> &Arc<GrammarRuntime>;
 
     /// Parses token stream into AST.
     fn parse(&self, token: &mut Tokenizer) -> Result<Ast, SwiftletError>;

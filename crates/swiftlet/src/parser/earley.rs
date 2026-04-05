@@ -306,8 +306,8 @@ impl EarleyParser {
 
 impl ParserBackend for EarleyParser {
     /// Returns parser frontend.
-    fn get_parser_frontend(&self) -> Arc<GrammarRuntime> {
-        self.parser_frontend.clone()
+    fn get_parser_frontend(&self) -> &Arc<GrammarRuntime> {
+        &self.parser_frontend
     }
 
     /// Runs Earley parsing and returns an AST according to ambiguity strategy.
