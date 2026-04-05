@@ -495,8 +495,7 @@ impl ClrParser {
         for _ in 0..rule.expansion.len() {
             stack_states.pop();
             let ast = stack_symbols.pop().unwrap();
-            let is_flattened = ast.is_hidden();
-            if is_flattened {
+            if ast.is_hidden() {
                 match ast {
                     Ast::Tree(_, child) => children.extend(child.into_iter().rev()),
                     Ast::Token(_) => continue,
@@ -537,16 +536,7 @@ impl ClrParser {
         tokenizer: &mut Tokenizer,
         state: usize,
     ) -> Result<Option<TokenMatch>, SwiftletError> {
-        #[cfg(feature = "debug")]
-        if self.parser_conf.debug {
-            println!();
-            println!("state: {}", state);
-        }
         let symbols = self.state_symbol.get(&state).unwrap();
-        #[cfg(feature = "debug")]
-        if self.parser_conf.debug {
-            println!("symbols: {:?}", symbols);
-        }
         let mut terminal_defs = symbols
             .iter()
             .filter_map(|symbol| tokenizer.get_terminal_def(symbol).cloned())
@@ -558,6 +548,9 @@ impl ClrParser {
         });
         #[cfg(feature = "debug")]
         if self.parser_conf.debug {
+            println!();
+            println!("state: {}", state);
+            println!("symbols: {:?}", symbols);
             println!("terminal_def: ");
             for td in terminal_defs.iter() {
                 println!("\t{:?}", td);

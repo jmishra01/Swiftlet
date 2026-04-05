@@ -11,10 +11,6 @@ use crate::parser_frontends::GrammarRuntime;
 use crate::transform::{RuleCompiler, TerminalCompiler, fetch_terminals};
 use crate::{ParserConfig, terminal_def};
 
-static RULES: LazyLock<HashMap<Arc<Symbol>, Vec<Arc<Rule>>>> = LazyLock::new(grammar_rules);
-
-static TERMINALS: LazyLock<Vec<Arc<TerminalDef>>> = LazyLock::new(grammar_terminals);
-
 pub(crate) static PARSER: LazyLock<Arc<GrammarRuntime>> = LazyLock::new(grammar_runtime);
 
 pub static GRAMMAR_PARSER: LazyLock<ParserEngine> = LazyLock::new(|| {
@@ -129,13 +125,12 @@ pub fn grammar_rules() -> HashMap<Arc<Symbol>, Vec<Arc<Rule>>> {
 }
 
 /// Creates the parser frontend used for parsing grammar definitions.
-pub fn grammar_runtime() -> Arc<GrammarRuntime> {
-    // TODO: Add _NL in ignore list
+pub(crate) fn grammar_runtime() -> Arc<GrammarRuntime> {
     let parser_conf = Arc::new(GrammarRules::new(
-        RULES.clone(),
+        grammar_rules(),
         Vec::from(["WS".to_string(), "COMMENT".to_string()]),
     ));
-    let lexer_conf = Arc::new(LexerConf::new(TERMINALS.to_vec()));
+    let lexer_conf = Arc::new(LexerConf::new(grammar_terminals()));
 
     Arc::new(GrammarRuntime::new(lexer_conf, parser_conf))
 }

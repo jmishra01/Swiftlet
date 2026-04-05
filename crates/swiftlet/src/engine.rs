@@ -14,7 +14,7 @@ pub struct ParserEngine {
 
 impl ParserEngine {
     /// Creates a parser engine backed by the parser selected in `parser_conf`.
-    pub fn new(parser_frontend: Arc<GrammarRuntime>, parser_conf: Arc<ParserConfig>) -> Self {
+    pub(crate) fn new(parser_frontend: Arc<GrammarRuntime>, parser_conf: Arc<ParserConfig>) -> Self {
         match parser_conf.algorithm {
             Algorithm::Earley => Self {
                 parser: Box::new(EarleyParser::new(parser_frontend, parser_conf)),
@@ -26,7 +26,7 @@ impl ParserEngine {
     }
 
     /// Tokenizes input text using the parser frontend's cached ignore symbols.
-    pub fn tokenize(&self, text: &str) -> Tokenizer {
+    pub(crate) fn tokenize(&self, text: &str) -> Tokenizer {
         self.parser.get_parser_frontend().tokenizer(text)
     }
 
