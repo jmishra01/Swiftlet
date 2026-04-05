@@ -25,7 +25,7 @@ pub(crate) type VecItemSet = Vec<ItemSet>;
 pub(crate) type StateSymbol = HashMap<usize, HashSet<Arc<Symbol>>>;
 pub(crate) type Action = HashMap<(usize, Arc<Symbol>), IndexSet<ParseAction>>;
 pub(crate) type GoTo = HashMap<(usize, Arc<Symbol>), usize>;
-pub(crate) type First = HashMap<Arc<Symbol>, HashSet<Arc<Symbol>>>;
+pub(crate) type First = HashMap<Arc<Symbol>, SymbolSet>;
 type ItemSetKey = Vec<(usize, usize, bool, String)>;
 
 /// Describes a parser table action for the CLR automaton.
@@ -301,7 +301,7 @@ impl ClrParser {
 
     #[inline]
     /// Returns FIRST set for a symbol.
-    fn get_first(&self, seq: &Arc<Symbol>) -> Option<&HashSet<Arc<Symbol>>> {
+    fn get_first(&self, seq: &Arc<Symbol>) -> Option<&SymbolSet> {
         self.first.get(seq)
     }
 
@@ -559,7 +559,7 @@ impl ClrParser {
 
         for terminal_def in terminal_defs {
             let sym = terminal_def.get_name();
-            match tokenizer.peek_token_with_next_symbol(&sym) {
+            match tokenizer.peek_token_with_next_symbol(sym) {
                 Ok(lookahead) => {
                     if let Some(lookahead) = lookahead {
                         #[cfg(feature = "debug")]
@@ -585,9 +585,9 @@ impl ClrParser {
 }
 
 impl ParserBackend for ClrParser {
-    /// Returns parser frontend.
-    fn get_parser_frontend(&self) -> Arc<GrammarRuntime> {
-        self.parser_frontend.clone()
+    /// Returns a reference to the parser frontend (no Arc clone).
+    fn get_parser_frontend(&self) -> &Arc<GrammarRuntime> {
+        &self.parser_frontend
     }
 
     fn parse(&self, tokenizer: &mut Tokenizer) -> Result<Ast, SwiftletError> {
@@ -704,15 +704,16 @@ fn find_canonical_items(
     let mut pending = vec![0usize];
 
     while let Some(item_index) = pending.pop() {
-        let item = canonical_items[item_index].clone();
-        let list_of_next_symbols = next_symbols_by_index[item_index].clone();
+        let symbols: Vec<Arc<Symbol>> =
+            next_symbols_by_index[item_index].iter().cloned().collect();
 
-        for symbol in list_of_next_symbols.iter() {
-            let moved_items = item
+        for symbol in &symbols {
+            let moved_items: Vec<Arc<ClrItem>> = canonical_items[item_index]
                 .iter()
                 .filter(|x1| x1.is_next_symbol(symbol))
                 .map(|x2| Arc::new(x2.move_dot().unwrap()))
-                .collect::<Vec<_>>();
+                .collect();
+
             let (next_canonical_item, next_list_of_next_symbols) =
                 closure(lr_parser, moved_items.into_iter());
             if next_canonical_item.is_empty() {
@@ -767,7 +768,7 @@ pub(crate) fn canonical_items(lr_parser: &mut ClrParser) -> (VecItemSet, GoTo) {
 pub(crate) fn first_set(rules: &[Arc<Rule>]) -> First {
     let mut first: First = rules
         .iter()
-        .map(|x| (x.origin.clone(), HashSet::new()))
+        .map(|x| (x.origin.clone(), SymbolSet::new()))
         .collect();
 
     let mut added = true;
@@ -784,16 +785,11 @@ pub(crate) fn first_set(rules: &[Arc<Rule>]) -> First {
                     let val = first.entry(e.clone()).or_default();
                     val.insert(e.clone());
                 } else if !first[e].is_empty() {
-                    // In the block, first v_iter calculate before val to avoid mutatable and non-mutatable error.
-                    let v_iter: HashSet<Arc<Symbol>> =
-                        first.get(e).unwrap().iter().cloned().collect();
-
-                    let val = first.get_mut(origin).unwrap();
-                    for v in v_iter {
-                        if val.insert(v) {
-                            added = true;
-                        }
-                    }
+                    let e_symbol_set: SymbolSet = first[e].iter().cloned().collect();
+                    let origin_symbol_set: &mut SymbolSet = first.get_mut(origin).unwrap();
+                    let val_len: usize = origin_symbol_set.len();
+                    origin_symbol_set.extend(e_symbol_set);
+                    added = (origin_symbol_set.len() > val_len) || added;
                 }
             }
             for t in rule.expansion[1..].iter().filter(|x| x.is_terminal()) {

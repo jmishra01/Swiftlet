@@ -22,11 +22,9 @@ impl Symbol {
     }
 
     /// Returns the underlying symbol text as an owned string.
+    #[inline]
     pub fn get_value(&self) -> String {
-        match self {
-            Symbol::Terminal(value) => value.clone(),
-            Symbol::NonTerminal(value) => value.clone(),
-        }
+        self.as_str().to_string()
     }
 
     #[inline(always)]
@@ -169,9 +167,9 @@ impl TerminalDef {
         }
     }
 
-    /// Returns terminal symbol name.
-    pub fn get_name(&self) -> Arc<Symbol> {
-        self.name.clone()
+    /// Returns a reference to the terminal symbol name (avoids Arc clone at call site).
+    pub fn get_name(&self) -> &Arc<Symbol> {
+        &self.name
     }
 
     /// Attempts to match this terminal at the beginning of `text`.
@@ -232,7 +230,7 @@ impl Token {
 
     /// Returns the terminal name associated with this token.
     pub fn get_terminal(&self) -> String {
-        self.terminal.get_value()
+        self.terminal.as_str().to_string()
     }
 
     /// Returns the token text from the shared source buffer.

@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
 static ESCAPE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\p{P})").unwrap());
+static REGEX_FLAGS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/[imsux]*$").unwrap());
 
 pub type OptVecStr = Option<Vec<String>>;
 pub type OptStr = Option<String>;
@@ -85,8 +86,7 @@ impl<'a> TerminalCompiler<'a> {
         let mut pattern = pattern.as_str();
         pattern = pattern.strip_prefix("/")?;
 
-        let regex_flag_match = Regex::new(r"/[imsux]*$").unwrap();
-        let captures = regex_flag_match.captures(pattern).unwrap().unwrap();
+        let captures = REGEX_FLAGS.captures(pattern).unwrap().unwrap();
         let capture = captures.get(0).unwrap().as_str();
         pattern = pattern.strip_suffix(capture)?;
         let mut flags = String::new();
@@ -588,8 +588,7 @@ impl RuleCompiler {
         let mut pattern = rule.first().unwrap().as_str();
         pattern = pattern.strip_prefix("/")?;
 
-        let regex_flag_match = Regex::new(r"/[imsux]*$").unwrap();
-        let captures = regex_flag_match.captures(pattern).unwrap().unwrap();
+        let captures = REGEX_FLAGS.captures(pattern).unwrap().unwrap();
         let capture = captures.get(0).unwrap().as_str();
         let regex_flag = RegexFlag {
             i: capture.contains('i'),
