@@ -1,8 +1,3 @@
-## 🚧 Project Status
-
-> **Warning**
-> This project is under heavy development. APIs and features may change frequently, and breaking changes can occur without notice.
-
 # Swiftlet - Text parsing library
 
 Swiftlet is a high-performance text-parsing library for Rust, inspired by Python’s [Lark](https://lark-parser.readthedocs.io/en/stable/index.html).
