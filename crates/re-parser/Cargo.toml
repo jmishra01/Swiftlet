@@ -1,0 +1,22 @@
+[package]
+name = "re-parser"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "A regex pattern parser that builds a typed AST from regex syntax"
+license = "MIT"
+repository = "https://github.com/jmishra01/swiftlet"
+documentation = "https://docs.rs/re-parser"
+keywords = ["regex", "parser", "ast", "parsing"]
+categories = ["parser-implementations", "parsing"]
+readme = "README.md"
+
+[lib]
+name = "re_parser"
+crate-type = ["lib"]
+
+[features]
+default = []
+
+[dependencies]
+thiserror = { workspace = true }

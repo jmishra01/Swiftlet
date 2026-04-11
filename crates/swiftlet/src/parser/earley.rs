@@ -471,12 +471,6 @@ mod tests {
         normalized
     }
 
-    #[cfg(feature = "debug")]
-    fn test_frontend(grammar: &str, parser_opt: Arc<ParserConfig>) -> Arc<GrammarRuntime> {
-        load_grammar(&normalize_grammar(grammar), parser_opt).expect("failed to load grammar")
-    }
-
-    #[cfg(not(feature = "debug"))]
     fn test_frontend(grammar: &str, _parser_opt: Arc<ParserConfig>) -> Arc<GrammarRuntime> {
         load_grammar(&normalize_grammar(grammar)).expect("failed to load grammar")
     }

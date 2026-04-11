@@ -2,16 +2,45 @@
 members = ["crates/*", "pyswiftlet"]
 resolver = "3"
 
-
 [workspace.dependencies]
 swiftlet = {path="crates/swiftlet"}
-pyo3 = { version = "0.28.2", features = ["extension-module", "pyo3-macros"] }
+pyo3 = { version = "0.28.3", features = ["extension-module", "pyo3-macros"] }
 fancy-regex = { version = "0.17.0" }
-indexmap = { version = "2.11.0" }
-thiserror = { version = "2.0.16" }
-chrono = {version="0.4"}
+indexmap = { version = "2.14.0" }
+thiserror = { version = "2.0.18" }
+chrono = {version="0.4.44"}
 
+# DEV
+# Fast iteration: light optimization of your own code, full optimization of
+# dependencies (they rarely change so they don't slow incremental builds).
+[profile.dev]
+opt-level = 1          # basic opts — shorter build times than opt-level=0
+debug = true           # full debug info for breakpoints and backtraces
+incremental = true     # recompile only what changed
+split-debuginfo = "unpacked"  # faster linking on macOS; no-op on Linux/Windows
 
-[profile.samply]
+[profile.dev.package."*"]
+opt-level = 3          # fully optimize deps: they compile once and are cached
+debug = false          # skip dep debug info — saves disk space and link time
+
+# RELEASE
+# Maximum performance for production binaries.
+[profile.release]
+opt-level = 3          # full LLVM optimization
+lto = "fat"            # whole-program link-time optimization across all crates
+codegen-units = 1      # single CGU — allows more aggressive cross-function opts
+panic = "abort"        # no unwinding tables; smaller binary + slight speedup
+strip = "symbols"      # strip symbol table (keeps line-table for addr2line)
+incremental = false    # deterministic, reproducible output
+
+# BENCH
+# Release-quality code that profilers and flamegraph tools can read.
+[profile.bench]
 inherits = "release"
-debug = true
+debug = true           # keep DWARF so perf/samply/instruments see symbol names
+strip = "none"         # don't strip — profilers need the symbol table
+
+# SAMPLY
+# Alias kept for anyone already using `cargo build --profile samply`.
+[profile.samply]
+inherits = "bench"

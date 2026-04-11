@@ -14,9 +14,10 @@ readme = "../../README.md"
 fancy-regex = {workspace = true}
 indexmap = {workspace = true}
 thiserror = {workspace = true}
+re-parser = {path = "../re-parser", version = "0.1.0"}
 
 [features]
-default = []
+default = ["debug"]
 debug = []
 
 [profile.dev]

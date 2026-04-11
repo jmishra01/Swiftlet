@@ -119,13 +119,7 @@ impl Swiftlet {
     /// Loads and validates a grammar from inline text.
     pub fn from_str(grammar: &str) -> Result<Self, SwiftletError> {
         let grammar = normalize_grammar(grammar);
-
-        #[cfg(feature = "debug")]
-        let frontend = load_grammar(&grammar, Arc::new(ParserConfig::default()))?;
-
-        #[cfg(not(feature = "debug"))]
         let frontend = load_grammar(&grammar)?;
-
         Ok(Self { frontend })
     }
 

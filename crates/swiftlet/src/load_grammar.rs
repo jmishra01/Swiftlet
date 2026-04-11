@@ -136,141 +136,103 @@ pub(crate) fn grammar_runtime() -> Arc<GrammarRuntime> {
 }
 
 /// Parses grammar text and transforms it into a runnable parser frontend.
-macro_rules! impl_load_grammar {
-    ($( $extra_arg:ident : $extra_type:ty ),*) => {
-        /// Loads a grammar definition into a ready-to-use parser frontend.
-        pub fn load_grammar(grammar: &str, $( $extra_arg : $extra_type ),*) -> Result<Arc<GrammarRuntime>, SwiftletError> {
-            let tree = GRAMMAR_PARSER
-                .parse(grammar)
-                .map_err(|e| GrammarError::Parse(e.to_string()))?;
-            $(
-                if $extra_arg.debug {
-                    println!("\nAST of Grammar");
-                    println!("==============");
-                    tree.pretty_print();
-                    println!();
-                }
-            )*
+pub fn load_grammar(grammar: &str) -> Result<Arc<GrammarRuntime>, SwiftletError> {
+    let tree = GRAMMAR_PARSER
+        .parse(grammar)
+        .map_err(|e| GrammarError::Parse(e.to_string()))?;
 
-            let common_terminals = get_common_terminals();
-            let imported_terminals = tree
-                .trees_named("import")
-                .map(|imports| {
-                    imports
-                        .iter()
-                        .flat_map(|import| fetch_terminals(import))
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
+    let common_terminals = get_common_terminals();
+    let imported_terminals = tree
+        .trees_named("import")
+        .map(|imports| {
+            imports
+                .iter()
+                .flat_map(|import| fetch_terminals(import))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
-            let mut terminals = if let Some(terminals) = tree.trees_named("term") {
-                let known_terminals = imported_terminals
-                    .iter()
-                    .filter_map(|name| {
-                        common_terminals
-                            .get(name)
-                            .map(|terminal| (name.clone(), terminal.clone()))
-                    })
-                    .collect::<HashMap<_, _>>();
-                let mut terminal_compiler = TerminalCompiler::new(terminals, known_terminals);
-                terminal_compiler.compile();
-                terminal_compiler.get_terminals()
-            } else {
-                vec![]
-            };
+    let mut terminals = if let Some(terminals) = tree.trees_named("term") {
+        let known_terminals = imported_terminals
+            .iter()
+            .filter_map(|name| {
+                common_terminals
+                    .get(name)
+                    .map(|terminal| (name.clone(), terminal.clone()))
+            })
+            .collect::<HashMap<_, _>>();
+        let mut terminal_compiler = TerminalCompiler::new(terminals, known_terminals);
+        terminal_compiler.compile();
+        terminal_compiler.get_terminals()
+    } else {
+        vec![]
+    };
 
-            let mut update_terminals = |arg0: &String| {
-                if common_terminals.contains_key(arg0) {
-                    terminals.push(common_terminals.get(arg0).unwrap().clone());
-                } else {
-                    terminals.push(Arc::new(TerminalDef::with_regex(
-                        arg0,
-                        arg0,
-                        RegexFlag::default(),
-                        5
-                    )
-                    ));
-                }
-            };
-
-            let ignores: Vec<String> = match tree.trees_named("ignore") {
-                Some(ignores) => {
-                    ignores
-                    .iter()
-                    .map(|ignore| fetch_terminals(ignore))
-                    .flatten()
-                    .collect::<Vec<_>>()
-                },
-                None => vec![],
-            };
-            ignores.iter().for_each(&mut update_terminals);
-
-            imported_terminals.iter().for_each(&mut update_terminals);
-            let Some(rules) = tree.trees_named("rule") else {
-                return Err(GrammarError::Parse(
-                    "grammar does not contain any rule definitions".to_string(),
-                ).into());
-            };
-
-            let mut transformer = RuleCompiler::new();
-
-            transformer.compile(rules);
-
-            let rules = match transformer.get_grammar() {
-                Ok(rules) => {
-                    rules
-                },
-                Err(e) => return Err(e)
-            };
-
-            terminals.extend(transformer.get_terminal());
-            terminals.sort_by(|first, second| {
-                second.priority.cmp(&first.priority)
-                .then(
-                    second.max_width.cmp(&first.max_width)
-                    .then(second.value.len().cmp(&first.value.len()))
-                )
-            });
-            terminals.dedup_by(|first, second| {
-                first.get_name() == second.get_name()
-                    && first.value == second.value
-                    && first.priority == second.priority
-                    && first.max_width == second.max_width
-            });
-
-            $(
-                if $extra_arg.debug {
-                    println!("\nTerminals");
-                    println!("=========");
-                    for (index, t) in terminals.iter().enumerate() {
-                        println!("\t{index:?}; {t:?}");
-                    }
-
-                    println!("\nGrammar");
-                    println!("=======");
-                    let mut index = 0;
-                    for (_, prod) in rules.iter() {
-                        for p in prod.iter() {
-                            println!("\t{index:?}; {p:?}");
-                            index += 1;
-                        }
-                    }
-                }
-            )*
-
-            let parser_conf = Arc::new(GrammarRules::new(rules, ignores));
-            let lexer_conf = Arc::new(LexerConf::new(terminals));
-
-            Ok(Arc::new(GrammarRuntime::new(lexer_conf, parser_conf)))
+    let mut update_terminals = |arg0: &String| {
+        if common_terminals.contains_key(arg0) {
+            terminals.push(common_terminals.get(arg0).unwrap().clone());
+        } else {
+            terminals.push(Arc::new(TerminalDef::with_regex(
+                arg0,
+                arg0,
+                RegexFlag::default(),
+                5
+            )
+            ));
         }
     };
+
+    let ignores: Vec<String> = match tree.trees_named("ignore") {
+        Some(ignores) => {
+            ignores
+                .iter()
+                .map(|ignore| fetch_terminals(ignore))
+                .flatten()
+                .collect::<Vec<_>>()
+        },
+        None => vec![],
+    };
+    ignores.iter().for_each(&mut update_terminals);
+
+    imported_terminals.iter().for_each(&mut update_terminals);
+    let Some(rules) = tree.trees_named("rule") else {
+        return Err(GrammarError::Parse(
+            "grammar does not contain any rule definitions".to_string(),
+        ).into());
+    };
+
+    let mut transformer = RuleCompiler::new();
+
+    transformer.compile(rules);
+
+    let rules = match transformer.get_grammar() {
+        Ok(rules) => {
+            rules
+        },
+        Err(e) => return Err(e)
+    };
+
+    terminals.extend(transformer.get_terminal());
+    terminals.sort_by(|first, second| {
+        second.priority.cmp(&first.priority)
+            .then(second.max_width.cmp(&first.max_width))
+            .then(second.min_width.cmp(&first.min_width))
+            .then(second.value.len().cmp(&first.value.len()))
+    });
+    terminals.dedup_by(|first, second| {
+        first.get_name() == second.get_name()
+            && first.value == second.value
+            && first.priority == second.priority
+            && first.max_width == second.max_width
+            && first.min_width == second.min_width
+    });
+
+    let parser_conf = Arc::new(GrammarRules::new(rules, ignores));
+    let lexer_conf = Arc::new(LexerConf::new(terminals));
+
+    Ok(Arc::new(GrammarRuntime::new(lexer_conf, parser_conf)))
 }
 
-#[cfg(feature = "debug")]
-impl_load_grammar!(parser_option: Arc<ParserConfig>);
-
-#[cfg(not(feature = "debug"))]
-impl_load_grammar!();
 
 #[cfg(test)]
 mod tests {
@@ -431,18 +393,7 @@ mod tests {
         r#"Tree("start", [Tree("rule", [Tree("non_terminal", [Token(RULE, "s")]), Tree("or_expansion", [Tree("non_terminal", [Token(RULE, "e")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "e")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""+"")]), Tree("string", [Token(STRING, ""-"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "t")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("expansion", [Tree("op_expansion", [Tree("or_expansion", [Tree("expansion", [Tree("non_terminal", [Token(RULE, "t")]), Tree("or_expansion", [Tree("string", [Token(STRING, ""*"")]), Tree("string", [Token(STRING, ""\"")])])])]), Token(OP, "?")]), Tree("non_terminal", [Token(RULE, "d")])])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "d")]), Tree("or_expansion", [Tree("expansion", [Tree("string", [Token(STRING, ""("")]), Tree("non_terminal", [Token(RULE, "e")]), Tree("string", [Token(STRING, "")"")])]), Tree("non_terminal", [Token(RULE, "v")])])]), Tree("rule", [Tree("non_terminal", [Token(RULE, "v")]), Tree("or_expansion", [Tree("terminal", [Token(TERMINAL, "INT")])])]), Tree("import", [Tree("terminal", [Token(TERMINAL, "WS")]), Tree("terminal", [Token(TERMINAL, "INT")])]), Tree("ignore", [Tree("terminal", [Token(TERMINAL, "WS")])])])"#
     );
 
-    #[cfg(feature = "debug")]
-    #[test]
-    fn load_grammar_returns_error_instead_of_panicking_for_invalid_grammar() {
-        let parser_opt = Arc::new(ParserConfig::default());
-        let result = load_grammar("start T", parser_opt);
-        assert!(matches!(
-            result,
-            Err(SwiftletError::Grammar(GrammarError::Parse(_)))
-        ));
-    }
 
-    #[cfg(not(feature = "debug"))]
     #[test]
     fn load_grammar_returns_error_instead_of_panicking_for_invalid_grammar() {
         let result = load_grammar("start T");

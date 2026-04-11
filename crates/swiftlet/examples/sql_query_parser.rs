@@ -7,6 +7,7 @@ fn parse_text(grammar: &str, text: &str) {
     let current = Instant::now();
     let conf = Arc::new(ParserConfig {
         algorithm: Algorithm::CLR,
+        debug: true,
         ..Default::default()
     });
     let parser = Swiftlet::from_str(grammar)

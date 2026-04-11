@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
+use re_parser;
 
 /// Distinguishes grammar terminals from non-terminals.
 #[derive(Clone, Hash, Eq, PartialEq)]
@@ -114,6 +115,7 @@ pub struct TerminalDef {
     #[allow(dead_code)]
     pub(crate) value: String,
     pub(crate) pattern: Pattern,
+    pub(crate) min_width: usize,
     pub(crate) max_width: usize,
     pub(crate) priority: usize,
 }
@@ -127,6 +129,7 @@ impl TerminalDef {
             name,
             value: value.to_string(),
             pattern: Pattern::PatternStr(value.to_string()),
+            min_width: value.len(),
             max_width: value.len(),
             priority,
         }
@@ -140,7 +143,7 @@ impl TerminalDef {
         priority: usize,
     ) -> Self {
         let name = Arc::new(Symbol::Terminal(name.to_string()));
-        let (pattern, max_width) = {
+        let (pattern, min_width, max_width) = {
             let rb = RegexBuilder::new((r"^".to_string() + value).as_str())
                 .case_insensitive(regex_flag.i)
                 .multi_line(regex_flag.m)
@@ -150,18 +153,27 @@ impl TerminalDef {
                 .build()
                 .unwrap();
             let pr = Pattern::PatternRegex(rb);
-            let max = if value.contains("+") || value.contains("*") {
-                usize::MAX
-            } else {
-                value.len()
+
+            let (min, max) = match re_parser::parse(value) {
+                Ok(re_ast) => {
+                    (re_ast.min_width(), re_ast.max_width().unwrap_or_else(|| usize::MAX))
+                },
+                Err(_) => {
+                    if value.contains("+") || value.contains("*") {
+                        (value.len(), usize::MAX)
+                    } else {
+                        (value.len(), value.len())
+                    }
+                }
             };
-            (pr, max)
+            (pr, min, max)
         };
 
         Self {
             name,
             value: value.to_string(),
             pattern,
+            min_width,
             max_width,
             priority,
         }
