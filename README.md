@@ -1,4 +1,6 @@
-# Swiftlet - Text parsing library
+# Swiftlet - Text parsing library 
+[![Crates.io](https://img.shields.io/crates/d/swiftlet.svg)](https://crates.io/crates/swiftlet)
+[![Crates.io](https://img.shields.io/crates/v/swiftlet.svg)](https://crates.io/crates/swiftlet)
 
 Swiftlet is a high-performance text-parsing library for Rust, inspired by Python’s [Lark](https://lark-parser.readthedocs.io/en/stable/index.html).
 
