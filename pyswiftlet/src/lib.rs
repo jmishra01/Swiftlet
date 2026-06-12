@@ -1,5 +1,6 @@
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyIndexError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyList;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Mutex};
 use swiftlet::{
@@ -7,18 +8,20 @@ use swiftlet::{
     Swiftlet as RustSwiftlet, ast::Ast, grammar::Algorithm as RustAlgorithm,
 };
 
-/// Parses the Python-facing algorithm name into the Rust enum.
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 fn parse_algorithm(value: &str) -> PyResult<RustAlgorithm> {
     match value.to_ascii_lowercase().as_str() {
         "earley" => Ok(RustAlgorithm::Earley),
         "clr" => Ok(RustAlgorithm::CLR),
         _ => Err(PyValueError::new_err(format!(
-            "invalid algorithm '{value}', expected 'earley', 'clr'"
+            "invalid algorithm '{value}', expected 'earley' or 'clr'"
         ))),
     }
 }
 
-/// Parses the Python-facing ambiguity mode into the Rust enum.
 fn parse_ambiguity(value: &str) -> PyResult<RustAmbiguity> {
     match value.to_ascii_lowercase().as_str() {
         "resolve" => Ok(RustAmbiguity::Resolve),
@@ -29,19 +32,17 @@ fn parse_ambiguity(value: &str) -> PyResult<RustAmbiguity> {
     }
 }
 
-/// Converts a panic payload into a readable Python error message.
 fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
-    if let Some(message) = payload.downcast_ref::<String>() {
-        return message.clone();
+    if let Some(s) = payload.downcast_ref::<String>() {
+        return s.clone();
     }
-    if let Some(message) = payload.downcast_ref::<&str>() {
-        return (*message).to_string();
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        return (*s).to_string();
     }
     "swiftlet panicked".to_string()
 }
 
-/// Builds shared parser options from Python constructor arguments.
-fn build_parser_option(
+fn build_parser_config(
     start: &str,
     algorithm: &str,
     ambiguity: &str,
@@ -55,127 +56,104 @@ fn build_parser_option(
     }))
 }
 
-/// Builds a Rust parser from inline grammar text and maps panics to Python errors.
-fn build_parser_from_grammar(
-    grammar: &str,
+/// Generic constructor — avoids naming swiftlet's private `SwiftletError` type.
+fn build_parser<E: std::fmt::Display>(
+    make: impl FnOnce(Arc<ParserConfig>) -> Result<RustParser, E> + std::panic::UnwindSafe,
     start: &str,
     algorithm: &str,
     ambiguity: &str,
     debug: bool,
 ) -> PyResult<RustParser> {
-    let parser_option = build_parser_option(start, algorithm, ambiguity, debug)?;
-    let parser = catch_unwind(AssertUnwindSafe(|| {
-        RustSwiftlet::from_str(grammar).map(|grammar| grammar.parser(parser_option.as_ref().clone()))
-    }))
-    .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?;
-    parser.map_err(|err| PyValueError::new_err(err.to_string()))
+    let config = build_parser_config(start, algorithm, ambiguity, debug)?;
+    catch_unwind(|| make(config))
+        .map_err(|p| PyRuntimeError::new_err(panic_payload_to_string(p)))?
+        .map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
-/// Builds a Rust parser from a grammar file and maps panics to Python errors.
-fn build_parser_from_file(
-    file: &str,
-    start: &str,
-    algorithm: &str,
-    ambiguity: &str,
-    debug: bool,
-) -> PyResult<RustParser> {
-    let parser_option = build_parser_option(start, algorithm, ambiguity, debug)?;
-    let parser = catch_unwind(AssertUnwindSafe(|| {
-        RustSwiftlet::from_file(file).map(|grammar| grammar.parser(parser_option.as_ref().clone()))
-    }))
-    .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?;
-    parser.map_err(|err| PyValueError::new_err(err.to_string()))
-}
+// ---------------------------------------------------------------------------
+// Token
+// ---------------------------------------------------------------------------
 
-/// Token
-/// =====
-/// Signature:
-///     Token(word: String, start: Integer, end: Integer, line: Integer, terminal: String)
+/// A matched terminal token with its source span.
 ///
-/// Arguments:
-///     word:           String  | Value store by token.
-///     start:          Integer | Value start in the input string.
-///     end:            Integer | Value end in the input string.
-///     line:           Integer | Value line in the input string.
-///     terminal:       String  | Type of token.
-#[pyclass(module = "swiftlet._core", skip_from_py_object)]
-#[derive(Debug, Clone)]
+/// Attributes:
+///     word (str):      Matched text.
+///     start (int):     Start byte offset in the source.
+///     end (int):       End byte offset in the source.
+///     line (int):      Zero-based source line.
+///     terminal (str):  Terminal name from the grammar.
+#[pyclass(frozen, module = "swiftlet._core", skip_from_py_object, eq, hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Token {
-    word: String,
-    start: usize,
-    end: usize,
-    line: usize,
-    terminal: String,
+    pub word: String,
+    pub start: usize,
+    pub end: usize,
+    pub line: usize,
+    pub terminal: String,
 }
 
 #[pymethods]
 impl Token {
     #[new]
     #[pyo3(signature = (word, start, end, line, terminal))]
-    /// Creates a Python token wrapper.
     fn new(word: String, start: usize, end: usize, line: usize, terminal: String) -> Self {
-        Self {
-            word,
-            start,
-            end,
-            line,
-            terminal,
-        }
+        Self { word, start, end, line, terminal }
     }
 
-    /// Returns the matched token text.
     fn get_word(&self) -> &str {
         &self.word
     }
 
-    /// Returns the token terminal name.
     fn get_terminal(&self) -> &str {
         &self.terminal
     }
 
-    /// Returns the token start byte offset.
     fn get_start(&self) -> usize {
         self.start
     }
-    /// Returns the token end byte offset.
+
     fn get_end(&self) -> usize {
         self.end
     }
-    /// Returns the zero-based source line for the token.
+
     fn get_line(&self) -> usize {
         self.line
     }
-    /// Returns the user-facing string form of the token.
-    fn __str__(&self) -> PyResult<String> {
-        Ok(if self.terminal.starts_with("__") {
-            self.word.to_string()
-        } else {
-            format!("Token({}, \"{}\")", self.terminal, self.word)
-        })
+
+    fn __len__(&self) -> usize {
+        self.word.len()
     }
 
-    /// Returns the debug-style representation of the token.
-    fn __repr__(&self) -> PyResult<String> {
-        Ok(if self.terminal.starts_with("__") {
-            self.word.to_string()
+    fn __str__(&self) -> String {
+        if self.terminal.starts_with("__") {
+            self.word.clone()
+        } else {
+            format!("Token({}, \"{}\")", self.terminal, self.word)
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        if self.terminal.starts_with("__") {
+            self.word.clone()
         } else {
             format!(
                 "Token(Type: {}, Word: \"{}\", Start: {}, End: {}, Line: {})",
                 self.terminal, self.word, self.start, self.end, self.line
             )
-        })
+        }
     }
 }
 
-/// Tree
-/// =====
-/// Signature:
-///     Tree(name: String, children: List[Tree | Token])
+// ---------------------------------------------------------------------------
+// Tree
+// ---------------------------------------------------------------------------
+
+/// A parse-tree node produced by a grammar rule.
 ///
-/// Arguments:
-///     name:       String  | Name of tree (rule name).
-///     children:   List    | List of Tree or Token.
-#[pyclass]
+/// Attributes:
+///     name (str):      Grammar rule name.
+///     children (list): Child ``Tree`` / ``Token`` nodes.
+#[pyclass(module = "swiftlet._core")]
 pub struct Tree {
     name: String,
     children: Vec<Py<PyAny>>,
@@ -185,94 +163,163 @@ pub struct Tree {
 impl Tree {
     #[new]
     #[pyo3(signature = (name, children))]
-    /// Creates a Python tree wrapper.
     pub fn new(name: String, children: Vec<Py<PyAny>>) -> Self {
         Self { name, children }
     }
 
-    /// Returns child Python nodes.
     fn get_children(&self) -> &Vec<Py<PyAny>> {
         &self.children
     }
 
-    /// Set child of tree
-    /// Arguments:
-    ///     children: List
     fn set_children(&mut self, children: Vec<Py<PyAny>>) {
         self.children = children;
     }
 
-    /// Returns the tree node name.
     fn get_name(&self) -> &str {
         &self.name
     }
 
-    /// Returns the start offset of the first descendant token.
-    fn get_start(&self) -> usize {
-        let first = self.children.first().unwrap();
-        Python::attach(|py| {
-            if first.bind(py).is_instance_of::<Tree>() {
-                match first.call_method0(py, "get_start") {
-                    Ok(val) => val.extract::<usize>(py).unwrap(),
-                    Err(err) => {
-                        panic!("Tree error: {}", err);
-                    }
-                }
+    /// Returns `True` if this node is suppressed (``_name`` but not ``__name``).
+    fn is_suppressed(&self) -> bool {
+        self.name.starts_with('_') && !self.name.starts_with("__")
+    }
+
+    /// Returns `True` if this is a raw/anonymous terminal (``__name`` prefix).
+    fn is_anonymous(&self) -> bool {
+        self.name.starts_with("__")
+    }
+
+    /// Returns `True` if any descendant tree node has the given name.
+    fn contains_tree(&self, py: Python<'_>, tree_name: &str) -> bool {
+        if self.name == tree_name {
+            return true;
+        }
+        self.children.iter().any(|child| {
+            if let Ok(subtree) = child.bind(py).cast::<Tree>() {
+                subtree.borrow().contains_tree(py, tree_name)
             } else {
-                let token = first.bind(py).cast::<Token>().unwrap().borrow();
-                token.get_start()
+                false
             }
         })
     }
 
-    /// Returns the end offset of the last descendant token.
-    fn get_end(&self) -> usize {
-        let last = self.children.last().unwrap();
-        Python::attach(|py| {
-            if last.bind(py).is_instance_of::<Tree>() {
-                match last.call_method0(py, "get_end") {
-                    Ok(val) => val.extract::<usize>(py).unwrap(),
-                    Err(err) => {
-                        panic!("Tree error: {}", err);
-                    }
+    /// Returns the first descendant tree with the given name (depth-first).
+    fn find_tree(&self, py: Python<'_>, tree_name: &str) -> PyResult<Option<Py<PyAny>>> {
+        if self.name == tree_name {
+            let children = self.children.iter().map(|c| c.clone_ref(py)).collect();
+            return Ok(Some(
+                Py::new(py, Tree { name: self.name.clone(), children })?.into_any(),
+            ));
+        }
+        for child in &self.children {
+            if let Ok(subtree) = child.bind(py).cast::<Tree>() {
+                if let Some(found) = subtree.borrow().find_tree(py, tree_name)? {
+                    return Ok(Some(found));
                 }
-            } else {
-                let token = last.bind(py).cast::<Token>().unwrap().borrow();
-                token.get_end()
             }
-        })
+        }
+        Ok(None)
     }
 
-    /// Returns the user-facing string form of the tree.
-    fn __str__(&self) -> PyResult<String> {
-        let child = self
+    /// Returns all descendant trees with the given name (depth-first).
+    fn find_all_trees(&self, py: Python<'_>, tree_name: &str) -> PyResult<Vec<Py<PyAny>>> {
+        let mut results: Vec<Py<PyAny>> = Vec::new();
+        if self.name == tree_name {
+            let children = self.children.iter().map(|c| c.clone_ref(py)).collect();
+            results.push(Py::new(py, Tree { name: self.name.clone(), children })?.into_any());
+        }
+        for child in &self.children {
+            if let Ok(subtree) = child.bind(py).cast::<Tree>() {
+                results.extend(subtree.borrow().find_all_trees(py, tree_name)?);
+            }
+        }
+        Ok(results)
+    }
+
+    /// Returns the last child node, or `None` if the tree is empty.
+    fn last_child(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.children.last().map(|c| c.clone_ref(py))
+    }
+
+    /// Returns the start byte offset of the first descendant token.
+    fn get_start(&self, py: Python<'_>) -> PyResult<usize> {
+        let first = self
             .children
-            .iter()
-            .map(|c| c.to_string())
-            .collect::<Vec<String>>()
-            .join(", ");
-        Ok(format!("Tree({}, [{}])", self.name, child))
+            .first()
+            .ok_or_else(|| PyRuntimeError::new_err("Tree has no children"))?
+            .bind(py);
+        if let Ok(subtree) = first.cast::<Tree>() {
+            subtree.borrow().get_start(py)
+        } else if let Ok(tok) = first.cast::<Token>() {
+            // `Token` is frozen → `.get()` skips the GIL-based borrow lock.
+            Ok(tok.get().get_start())
+        } else {
+            Err(PyRuntimeError::new_err("expected Tree or Token child"))
+        }
     }
 
-    /// Returns the debug-style representation of the tree.
+    /// Returns the end byte offset of the last descendant token.
+    fn get_end(&self, py: Python<'_>) -> PyResult<usize> {
+        let last = self
+            .children
+            .last()
+            .ok_or_else(|| PyRuntimeError::new_err("Tree has no children"))?
+            .bind(py);
+        if let Ok(subtree) = last.cast::<Tree>() {
+            subtree.borrow().get_end(py)
+        } else if let Ok(tok) = last.cast::<Token>() {
+            Ok(tok.get().get_end())
+        } else {
+            Err(PyRuntimeError::new_err("expected Tree or Token child"))
+        }
+    }
+
+    fn __len__(&self) -> usize {
+        self.children.len()
+    }
+
+    fn __iter__(slf: PyRef<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        let refs: Vec<Py<PyAny>> = slf.children.iter().map(|c| c.clone_ref(py)).collect();
+        Ok(PyList::new(py, refs)?.call_method0("__iter__")?.unbind())
+    }
+
+    fn __getitem__(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
+        let len = self.children.len() as isize;
+        let idx = if index < 0 { len + index } else { index };
+        if idx < 0 || idx >= len {
+            return Err(PyIndexError::new_err("index out of range"));
+        }
+        Ok(self.children[idx as usize].clone_ref(py))
+    }
+
+    fn __str__(&self) -> String {
+        let child = self.children.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", ");
+        format!("Tree({}, [{}])", self.name, child)
+    }
+
     fn __repr__(&self) -> PyResult<String> {
-        let child = self
-            .children
-            .iter()
-            .map(|c| {
-                let val = Python::attach(|python| c.call_method0(python, "__repr__"))
-                    .expect("__repr__() failed");
-                val.to_string()
-            })
-            .collect::<Vec<String>>()
-            .join(", ");
+        let child = Python::attach(|py| {
+            self.children
+                .iter()
+                .map(|c| {
+                    c.call_method0(py, "__repr__")
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|_| "?".to_string())
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        });
         Ok(format!("Tree({}, [{}])", self.name, child))
     }
 }
 
-/// Converts a Rust AST node into the exported Python object graph.
+// ---------------------------------------------------------------------------
+// AST conversion
+// ---------------------------------------------------------------------------
+
 fn convert_to_py(py: Python<'_>, ast: &Ast) -> PyResult<Py<PyAny>> {
-    match &ast {
+    match ast {
         Ast::Token(token) => {
             let py_token = Token {
                 word: token.word().to_string(),
@@ -286,77 +333,95 @@ fn convert_to_py(py: Python<'_>, ast: &Ast) -> PyResult<Py<PyAny>> {
         Ast::Tree(name, children) => {
             let child = children
                 .iter()
-                .map(|child| convert_to_py(py, child).unwrap())
-                .collect::<Vec<_>>();
-
-            let tree = Tree {
-                name: name.to_string(),
-                children: child,
-            };
-            Ok(tree.into_pyobject(py)?.into_any().unbind())
+                .map(|c| convert_to_py(py, c))
+                .collect::<PyResult<Vec<_>>>()?;
+            Ok(Tree { name: name.to_string(), children: child }
+                .into_pyobject(py)?
+                .into_any()
+                .unbind())
         }
     }
 }
 
-/// Python wrapper around the Rust `Swiftlet` parser.
-#[pyclass(module = "swiftlet._core")]
+// ---------------------------------------------------------------------------
+// Swiftlet
+// ---------------------------------------------------------------------------
+
+/// Error variants returned across the `allow_threads` boundary (no Python objects).
+enum ParseErr {
+    Lock,
+    Panic(String),
+    Parse(String),
+}
+
+/// Compiled grammar and parser.  Thread-safe; the GIL is released while parsing.
+///
+/// Args:
+///     grammar (str):    EBNF grammar definition.
+///     start (str):      Start rule name (default: ``"start"``).
+///     algorithm (str):  ``"earley"`` (any CFG, default) or ``"clr"``
+///                       (LR(1) — faster for unambiguous grammars).
+///     ambiguity (str):  ``"resolve"`` (default) or ``"explicit"``.
+///     debug (bool):     Print internal parse tables (default: ``False``).
+#[pyclass(frozen, module = "swiftlet._core")]
 pub struct Swiftlet {
-    inner: Mutex<RustParser>,
+    inner: Arc<Mutex<RustParser>>,
 }
 
 #[pymethods]
 impl Swiftlet {
     #[new]
     #[pyo3(signature = (grammar, start="start", algorithm="earley", ambiguity="resolve", debug=false))]
-    /// Constructs a parser from grammar text.
-    fn new(
-        grammar: &str,
-        start: &str,
-        algorithm: &str,
-        ambiguity: &str,
-        debug: bool,
-    ) -> PyResult<Self> {
-        Ok(Self {
-            inner: Mutex::new(build_parser_from_grammar(
-                grammar, start, algorithm, ambiguity, debug,
-            )?),
-        })
+    fn new(grammar: &str, start: &str, algorithm: &str, ambiguity: &str, debug: bool) -> PyResult<Self> {
+        let grammar = grammar.to_string();
+        let parser = build_parser(
+            move |cfg| RustSwiftlet::from_str(&grammar).map(|g| g.parser((*cfg).clone())),
+            start, algorithm, ambiguity, debug,
+        )?;
+        Ok(Self { inner: Arc::new(Mutex::new(parser)) })
     }
 
     #[staticmethod]
     #[pyo3(signature = (file, start="start", algorithm="earley", ambiguity="resolve", debug=false))]
     /// Constructs a parser from a grammar file path.
-    fn from_file(
-        file: &str,
-        start: &str,
-        algorithm: &str,
-        ambiguity: &str,
-        debug: bool,
-    ) -> PyResult<Self> {
-        Ok(Self {
-            inner: Mutex::new(build_parser_from_file(
-                file, start, algorithm, ambiguity, debug,
-            )?),
-        })
+    fn from_file(file: &str, start: &str, algorithm: &str, ambiguity: &str, debug: bool) -> PyResult<Self> {
+        let file = file.to_string();
+        let parser = build_parser(
+            move |cfg| RustSwiftlet::from_file(&file).map(|g| g.parser((*cfg).clone())),
+            start, algorithm, ambiguity, debug,
+        )?;
+        Ok(Self { inner: Arc::new(Mutex::new(parser)) })
     }
 
-    /// Parses input text and converts the resulting AST into Python objects.
+    /// Parses *text* and returns a ``Tree`` or ``Token``.
+    ///
+    /// The GIL is released during the Rust parse so other Python threads
+    /// can run concurrently.
     fn parse(&self, py: Python<'_>, text: &str) -> PyResult<Py<PyAny>> {
-        let parser = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("failed to acquire parser lock"))?;
+        let inner = Arc::clone(&self.inner);
+        let text = text.to_string();
 
-        let parsed = catch_unwind(AssertUnwindSafe(|| parser.parse(text)))
-            .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?;
+        let result = py.detach(move || -> Result<Ast, ParseErr> {
+            let parser = inner.lock().map_err(|_| ParseErr::Lock)?;
+            catch_unwind(AssertUnwindSafe(|| parser.parse(&text)))
+                .map_err(|p| ParseErr::Panic(panic_payload_to_string(p)))?
+                .map_err(|e| ParseErr::Parse(e.to_string()))
+        });
 
-        let ast = parsed.map_err(|err| PyValueError::new_err(err.to_string()))?;
-        let py_ast = convert_to_py(py, &ast)?;
-        Ok(py_ast)
+        let ast = result.map_err(|e| match e {
+            ParseErr::Lock => PyRuntimeError::new_err("failed to acquire parser lock"),
+            ParseErr::Panic(s) => PyRuntimeError::new_err(s),
+            ParseErr::Parse(s) => PyValueError::new_err(s),
+        })?;
+
+        convert_to_py(py, &ast)
     }
 }
 
-/// Initializes the Python extension module.
+// ---------------------------------------------------------------------------
+// Module
+// ---------------------------------------------------------------------------
+
 #[pymodule]
 #[pyo3(name = "_swiftlet")]
 fn core(module: &Bound<'_, PyModule>) -> PyResult<()> {

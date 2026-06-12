@@ -18,26 +18,8 @@ re-parser = {path = "../re-parser", version = "0.1.0"}
 rustc-hash = {workspace = true}
 
 [features]
-default = ["debug"]
+default = []
 debug = []
-
-[profile.dev]
-opt-level = 1
-debug = true
-incremental = true
-lto = false
-
-[profile.dev.package."*"]
-opt-level = 3
-
-[profile.release]
-opt-level = 3
-lto = "fat"
-codegen-units = 1
-panic = "abort"
-strip = "symbols"
-incremental = false
-debug = false
 
 [dev-dependencies]
 criterion = { version = "0.8.2" }

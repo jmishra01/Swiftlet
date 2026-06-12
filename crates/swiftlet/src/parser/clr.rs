@@ -12,20 +12,21 @@ use crate::{
     terms,
 };
 use indexmap::IndexSet;
-use std::collections::{HashMap, HashSet};
+use rustc_hash::FxHashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::iter::Iterator;
 use std::sync::Arc;
 
 // Type Alias
 pub(crate) type SymbolSet = IndexSet<Arc<Symbol>>;
-pub(crate) type SymbolMap = HashMap<Arc<Symbol>, Vec<(usize, Arc<Rule>)>>;
+pub(crate) type SymbolMap = FxHashMap<Arc<Symbol>, Vec<(usize, Arc<Rule>)>>;
 pub(crate) type ItemSet = HashSet<Arc<ClrItem>>;
 pub(crate) type VecItemSet = Vec<ItemSet>;
-pub(crate) type StateSymbol = HashMap<usize, HashSet<Arc<Symbol>>>;
-pub(crate) type Action = HashMap<(usize, Arc<Symbol>), IndexSet<ParseAction>>;
-pub(crate) type GoTo = HashMap<(usize, Arc<Symbol>), usize>;
-pub(crate) type First = HashMap<Arc<Symbol>, SymbolSet>;
+pub(crate) type StateSymbol = FxHashMap<usize, HashSet<Arc<Symbol>>>;
+pub(crate) type Action = FxHashMap<(usize, Arc<Symbol>), IndexSet<ParseAction>>;
+pub(crate) type GoTo = FxHashMap<(usize, Arc<Symbol>), usize>;
+pub(crate) type First = FxHashMap<Arc<Symbol>, SymbolSet>;
 type ItemSetKey = Vec<(usize, usize, bool, String)>;
 
 /// Describes a parser table action for the CLR automaton (internal use only).
@@ -148,7 +149,7 @@ pub(crate) fn setup(
 ) -> (Vec<Arc<Rule>>, SymbolMap) {
     let mut rules = parser_frontend.get_parser().get_all_expansion().to_vec();
 
-    let mut mapped: SymbolMap = HashMap::new();
+    let mut mapped: SymbolMap = FxHashMap::default();
 
     for (index, rule) in rules.iter().enumerate() {
         mapped
@@ -199,9 +200,9 @@ impl ClrParser {
             rules,
             mapped,
             first,
-            action: HashMap::new(),
-            goto: HashMap::new(),
-            state_symbol: HashMap::new(),
+            action: FxHashMap::default(),
+            goto: FxHashMap::default(),
+            state_symbol: FxHashMap::default(),
         };
         let (canonical_items, transitions) = canonical_items(&mut clr);
 
@@ -312,9 +313,9 @@ impl ClrParser {
         canonical_items: &VecItemSet,
         transition: &GoTo,
     ) -> (Action, GoTo, StateSymbol) {
-        let mut action: Action = HashMap::new();
-        let mut goto: GoTo = HashMap::new();
-        let mut state_symbol: HashMap<usize, HashSet<Arc<Symbol>>> = HashMap::new();
+        let mut action: Action = FxHashMap::default();
+        let mut goto: GoTo = FxHashMap::default();
+        let mut state_symbol: StateSymbol = FxHashMap::default();
 
         for (index, item) in canonical_items.iter().enumerate() {
             for it in item.iter() {
@@ -368,6 +369,11 @@ impl ClrParser {
         if lr_table.len() == 1 {
             return Ok(lr_table.first().unwrap());
         }
+        let conflict_label = lr_table
+            .iter()
+            .map(|x| x.name())
+            .collect::<Vec<_>>()
+            .join("-");
         let mut best_action = None;
         let mut best_priority = 0usize;
 
@@ -381,14 +387,8 @@ impl ClrParser {
             };
 
             let Some(priority) = priority else {
-                let actions = lr_table
-                    .iter()
-                    .map(|x| x.name())
-                    .collect::<Vec<String>>()
-                    .join("-");
-
                 return Err(ParseError::Conflict {
-                    description: format!("Shift-Reduce conflict [{actions}]")
+                    description: format!("Shift-Reduce conflict [{}]", conflict_label)
                 }
                 .into());
             };
@@ -409,13 +409,10 @@ impl ClrParser {
                 };
 
                 if other_priority == Some(priority) {
-                    let actions = lr_table
-                        .iter()
-                        .map(|x| x.name())
-                        .collect::<Vec<String>>()
-                        .join("-");
-
-                    return Err(ParseError::Conflict { description: format!("Shift-Reduce conflict [{actions}]") }.into());
+                    return Err(ParseError::Conflict {
+                        description: format!("Shift-Reduce conflict [{}]", conflict_label),
+                    }
+                    .into());
                 }
             }
 
@@ -428,14 +425,8 @@ impl ClrParser {
         if let Some(best_action) = best_action {
             Ok(best_action)
         } else {
-            let actions = lr_table
-                .iter()
-                .map(|x| x.name())
-                .collect::<Vec<String>>()
-                .join("-");
-
             Err(ParseError::Conflict {
-                description: format!("unresolved conflict [{actions}]")
+                description: format!("unresolved conflict [{}]", conflict_label),
             }
             .into())
         }
@@ -691,7 +682,7 @@ pub(crate) fn closure(
 fn find_canonical_items(
     lr_parser: &mut ClrParser,
     canonical_items: &mut VecItemSet,
-    canonical_index: &mut HashMap<ItemSetKey, usize>,
+    canonical_index: &mut FxHashMap<ItemSetKey, usize>,
     next_symbols_by_index: &mut Vec<SymbolSet>,
     transitions: &mut GoTo,
 ) {
@@ -743,9 +734,10 @@ pub(crate) fn canonical_items(lr_parser: &mut ClrParser) -> (VecItemSet, GoTo) {
     let (first_items, list_of_next_symbols) = closure(lr_parser, first_items.iter().cloned());
 
     let mut canonical_items: VecItemSet = Vec::from([first_items.clone()]);
-    let mut canonical_index = HashMap::from([(item_set_key(&first_items), 0usize)]);
+    let mut canonical_index: FxHashMap<ItemSetKey, usize> =
+        FxHashMap::from_iter([(item_set_key(&first_items), 0usize)]);
     let mut next_symbols_by_index = vec![list_of_next_symbols];
-    let mut transitions: GoTo = HashMap::new();
+    let mut transitions: GoTo = FxHashMap::default();
 
     find_canonical_items(
         lr_parser,
