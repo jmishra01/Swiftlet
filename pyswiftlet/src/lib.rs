@@ -65,7 +65,7 @@ fn build_parser_from_grammar(
 ) -> PyResult<RustParser> {
     let parser_option = build_parser_option(start, algorithm, ambiguity, debug)?;
     let parser = catch_unwind(AssertUnwindSafe(|| {
-        RustSwiftlet::from_str(grammar).map(|grammar| grammar.parser(parser_option))
+        RustSwiftlet::from_str(grammar).map(|grammar| grammar.parser(parser_option.as_ref().clone()))
     }))
     .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?;
     parser.map_err(|err| PyValueError::new_err(err.to_string()))
@@ -81,7 +81,7 @@ fn build_parser_from_file(
 ) -> PyResult<RustParser> {
     let parser_option = build_parser_option(start, algorithm, ambiguity, debug)?;
     let parser = catch_unwind(AssertUnwindSafe(|| {
-        RustSwiftlet::from_file(file).map(|grammar| grammar.parser(parser_option))
+        RustSwiftlet::from_file(file).map(|grammar| grammar.parser(parser_option.as_ref().clone()))
     }))
     .map_err(|payload| PyRuntimeError::new_err(panic_payload_to_string(payload)))?;
     parser.map_err(|err| PyValueError::new_err(err.to_string()))
@@ -276,9 +276,9 @@ fn convert_to_py(py: Python<'_>, ast: &Ast) -> PyResult<Py<PyAny>> {
         Ast::Token(token) => {
             let py_token = Token {
                 word: token.word().to_string(),
-                start: token.get_start(),
-                end: token.get_end(),
-                line: token.get_line(),
+                start: token.start(),
+                end: token.end(),
+                line: token.line(),
                 terminal: token.terminal.get_value(),
             };
             Ok(py_token.into_pyobject(py)?.into_any().unbind())

@@ -15,6 +15,7 @@ fancy-regex = {workspace = true}
 indexmap = {workspace = true}
 thiserror = {workspace = true}
 re-parser = {path = "../re-parser", version = "0.1.0"}
+rustc-hash = {workspace = true}
 
 [features]
 default = ["debug"]

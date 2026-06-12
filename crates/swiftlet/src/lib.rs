@@ -1,9 +1,8 @@
-//! *Swiftlet* is a high-performance text-parsing library for Rust, inspired by Python’s [Lark](https://lark-parser.readthedocs.io/en/stable/index.html).
+//! *Swiftlet* is a high-performance text-parsing library for Rust, inspired by Python's [Lark](https://lark-parser.readthedocs.io/en/stable/index.html).
 //!
 //! # Example
 //! ```
 //! use swiftlet::preclude::*;
-//! use std::sync::Arc;
 //!
 //!
 //! fn calculate(ast: &Ast) -> i32 {
@@ -17,7 +16,7 @@
 //!                 "add" => calculate(&children[0]) + calculate(&children[2]),
 //!                 "sub" => calculate(&children[0]) - calculate(&children[2]),
 //!                 _ => {
-//!                     panic!("Invalid tree: {}", tree);
+//!                     panic!("unexpected tree: {}", tree);
 //!                 }
 //!             }
 //!         }
@@ -34,9 +33,8 @@
 //!         %ignore WS
 //!         "#;
 //!
-//!     let conf = Arc::new(ParserConfig::default());
 //!     let swiftlet = Swiftlet::from_str(grammar).expect("failed to load grammar");
-//!     let parser = swiftlet.parser(conf);
+//!     let parser = swiftlet.parser(ParserConfig::default());
 //!     let text = "10 - 2 + 5 - 2";
 //!
 //!     match parser.parse(text) {
@@ -44,9 +42,7 @@
 //!             print!("AST: "); tree.print();
 //!             println!("Total: {}", calculate(&tree));
 //!         }
-//!         Err(e) => {
-//!             println!("Error: {}", e);
-//!         }
+//!         Err(e) => println!("Error: {}", e),
 //!     }
 //! }
 //! ```
@@ -69,16 +65,25 @@ use crate::grammar::Algorithm;
 use crate::load_grammar::load_grammar;
 use crate::parser_frontends::GrammarRuntime;
 use error::SwiftletError;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
-/// Ambiguity Enum
-/// used to decide how to handle ambiguity in the parse. Relevant to Earley algorithm
+/// Controls how the Earley parser handles ambiguous grammars.
 #[derive(Clone, Debug)]
 pub enum Ambiguity {
-    /// Resolve - return first derivation.
+    /// Resolve - return the first derivation found and discard the rest.
     Resolve,
-    /// Explicit - return all derivation under '_ambiguity' tree node
+    /// Explicit - return all derivations nested under an '_ambiguity' tree node.
     Explicit,
+}
+
+impl Display for Ambiguity {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Ambiguity::Resolve => write!(f, "resolve"),
+            Ambiguity::Explicit => write!(f, "explicit"),
+        }
+    }
 }
 
 /// Configures parser construction and runtime behavior.
@@ -91,7 +96,6 @@ pub struct ParserConfig {
 }
 
 impl Default for ParserConfig {
-    /// Returns default parser options used by `Swiftlet`.
     fn default() -> Self {
         Self {
             start: "start".to_string(),
@@ -99,6 +103,16 @@ impl Default for ParserConfig {
             ambiguity: Ambiguity::Resolve,
             debug: false,
         }
+    }
+}
+
+impl Display for ParserConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ParserConfig {{ start: {}, algorithm: {}, ambiguity: {}, debug: {} }}",
+            self.start, self.algorithm, self.ambiguity, self.debug
+        )
     }
 }
 
@@ -135,15 +149,21 @@ impl Swiftlet {
         Self::from_str(&content)
     }
 
-    /// Builds a parser instance for the given parser options.
-    pub fn parser(&self, parser_option: Arc<ParserConfig>) -> Parser {
+    /// Builds a parser instance for the given configuration.
+    ///
+    /// Accepts `ParserConfig` by value, by reference clone, or as `Arc<ParserConfig>`
+    /// ``ìgnore
+    /// swiftlet.parser(ParserConfig::default())            // by value
+    /// swiftlet.parser(Arc::new(ParserConfig::default())   // existing Arc
+    /// ```
+    pub fn parser(&self, config: impl Into<Arc<ParserConfig>>) -> Parser {
         Parser {
-            parser_engine: ParserEngine::new(self.frontend.clone(), parser_option),
+            parser_engine: ParserEngine::new(self.frontend.clone(), config.into()),
         }
     }
 }
 
-/// Parser instance built from a validated Swiftlet grammar plus parser options.
+/// Parser instance built from a validated Swiftlet grammar plus configuration.
 pub struct Parser {
     parser_engine: ParserEngine,
 }

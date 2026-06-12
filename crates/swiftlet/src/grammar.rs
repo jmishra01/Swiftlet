@@ -11,6 +11,15 @@ pub enum Algorithm {
     CLR,
 }
 
+impl Display for Algorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Algorithm::Earley => write!(f, "Earley"),
+            Algorithm::CLR => write!(f, "CLR"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Default)]
 pub(crate) struct RuleMeta {
     expand: bool,
@@ -50,27 +59,50 @@ pub struct Rule {
     pub(crate) expansion: Vec<Arc<Symbol>>,
     pub(crate) rule_option: Arc<RuleMeta>,
     pub(crate) order: usize,
+    /// Precomputed: origin name starts with `_` (hidden node -- children are inline).
+    pub(crate) is_hidden: bool,
+    /// Precomputed: rule should be expanded (flattened) in the AST.
+    pub(crate) expand: bool
 }
 
 impl Rule {
-    /// Creates a grammar rule with a cached expansion length.
+    /// Creates a grammar rule with a cached `is_hidden` and `expand` flags
     pub(crate) fn new(
         origin: Arc<Symbol>,
         expansion: Vec<Arc<Symbol>>,
         rule_option: Arc<RuleMeta>,
         order: usize,
     ) -> Self {
+        let is_hidden = origin.as_str().starts_with('_');
+        let expand = rule_option.expand;
         Self {
             origin,
             expansion,
             rule_option,
             order,
+            is_hidden,
+            expand
         }
     }
 
-    /// Returns whether this rule should be expanded in the resulting AST.
+    /// Returns whether this rule should be expanded (flattened) in the resulting AST.
+    #[inline(always)]
     pub fn is_expand(&self) -> bool {
-        self.rule_option.expand
+        self.expand
+    }
+
+    /// Returns whether this rule should be expanded (flattened) in the resulting AST.
+    pub fn origin(&self) -> &Symbol {
+        &self.origin
+    }
+
+    pub fn expansion(&self) -> &[Arc<Symbol>] {
+        &self.expansion
+    }
+
+    /// Returns the rule priority used for conflict resolution
+    pub fn priority(&self) -> usize {
+        self.rule_option.priority()
     }
 
     /// Returns the expansion length.

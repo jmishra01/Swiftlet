@@ -1,13 +1,14 @@
 use crate::grammar::Rule;
 use crate::lexer::{LexerConf, Symbol, TerminalDef, Tokenizer};
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Stores grammar rules, ignore directives, and cached rule expansions.
 #[derive(Debug)]
 pub struct GrammarRules {
-    rules: HashMap<Arc<Symbol>, Vec<Arc<Rule>>>,
-    ignore_symbols: Arc<HashSet<Arc<Symbol>>>,
+    rules: FxHashMap<Arc<Symbol>, Vec<Arc<Rule>>>,
+    ignore_symbols: Arc<FxHashSet<Arc<Symbol>>>,
     all_expansions: Vec<Arc<Rule>>,
 }
 
@@ -17,17 +18,17 @@ impl GrammarRules {
         let ignore_symbols = ignores
             .iter()
             .map(|name| Arc::new(Symbol::Terminal(name.clone())))
-            .collect::<HashSet<_>>();
+            .collect::<FxHashSet<_>>();
         let all_expansions = rules.values().flatten().cloned().collect();
         Self {
-            rules,
+            rules: rules.into_iter().collect(),
             ignore_symbols: Arc::new(ignore_symbols),
             all_expansions,
         }
     }
 
     /// Returns cached ignored terminal symbols.
-    pub(crate) fn get_ignore_symbols(&self) -> &Arc<HashSet<Arc<Symbol>>> {
+    pub(crate) fn get_ignore_symbols(&self) -> &Arc<FxHashSet<Arc<Symbol>>> {
         &self.ignore_symbols
     }
 

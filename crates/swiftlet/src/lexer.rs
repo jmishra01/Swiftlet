@@ -1,8 +1,9 @@
 use crate::error::SwiftletError;
 use fancy_regex::{Regex, RegexBuilder};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
+use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use re_parser;
 
@@ -43,17 +44,19 @@ impl Symbol {
     }
 }
 
+impl Display for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 impl Debug for Symbol {
     /// Formats symbol as `Terminal(name)` or `NonTerminal(name)`.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Symbol::NonTerminal(name) => format!("NonTerminal({name})"),
-                Symbol::Terminal(name) => format!("Terminal({name})"),
-            }
-        )
+        match self {
+            Symbol::Terminal(value) => write!(f, "Terminal({})", value),
+            Symbol::NonTerminal(value) => write!(f, "NonTerminal({})", value),
+        }
     }
 }
 
@@ -205,6 +208,8 @@ pub struct Token {
     end: usize,
     line: usize,
     pub terminal: Arc<Symbol>,
+    /// Precomputed: `terminal` starts with `_` but not `__` (hidden - suppressed from AST).
+    pub terminal_is_hidden: bool,
 }
 
 impl Token {
@@ -216,33 +221,36 @@ impl Token {
         line: usize,
         terminal: Arc<Symbol>,
     ) -> Self {
+        let name = terminal.as_str();
+        let terminal_is_hidden = name.starts_with('_') && !name.starts_with("__");
         Self {
             source: source.into(),
             start,
             end,
             line,
             terminal,
+            terminal_is_hidden,
         }
     }
 
     /// Returns the token start byte offset.
-    pub fn get_start(&self) -> usize {
+    pub fn start(&self) -> usize {
         self.start
     }
 
     /// Returns the token end byte offset.
-    pub fn get_end(&self) -> usize {
+    pub fn end(&self) -> usize {
         self.end
     }
 
     /// Returns the zero-based source line where the token starts.
-    pub fn get_line(&self) -> usize {
+    pub fn line(&self) -> usize {
         self.line
     }
 
     /// Returns the terminal name associated with this token.
-    pub fn get_terminal(&self) -> String {
-        self.terminal.as_str().to_string()
+    pub fn terminal(&self) -> &str {
+        self.terminal.as_str()
     }
 
     /// Returns the token text from the shared source buffer.
@@ -277,6 +285,14 @@ impl PartialEq for Token {
 
 impl Eq for Token {}
 
+impl Hash for Token {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.word().hash(state);
+        self.line().hash(state);
+        self.terminal().hash(state);
+    }
+}
+
 /// Stores a side-effect-free token probe together with the tokenizer state after commit.
 #[derive(Clone, Debug)]
 pub(crate) struct TokenMatch {
@@ -285,6 +301,27 @@ pub(crate) struct TokenMatch {
     pub(crate) next_line: usize,
 }
 
+/// Allocation-free result of a token peek: just the offsets and metadata needed to
+/// rank candidates and, for the winner, build the `Token` afterward.
+///
+/// In the Earley parser many terminals are peeked at one position but only the
+/// priority-sort winner is consumed, so deferring the `Arc<Token>` allocation until
+/// after selection avoids building tokens that are immediately discarded.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TokenProbe {
+    /// Byte offset where the match starts (after skipping ignored terminals).
+    pub(crate) start: usize,
+    /// Source line at `start`.
+    pub(crate) line: usize,
+    /// Byte offset immediately after the match (also the token's end offset).
+    pub(crate) next_start: usize,
+    /// Source line after consuming the match.
+    pub(crate) next_line: usize,
+    /// Matched terminal's priority.
+    pub(crate)  priority: usize,
+}
+
+
 /// Tokenizes input text using the configured terminal definitions.
 #[derive(Debug, Clone)]
 pub struct Tokenizer {
@@ -292,15 +329,23 @@ pub struct Tokenizer {
     start: usize,
     line: usize,
     len: usize,
-    sym_terminal_def: Arc<HashMap<Arc<Symbol>, Arc<TerminalDef>>>,
+    sym_terminal_def: Arc<FxHashMap<Arc<Symbol>, Arc<TerminalDef>>>,
     ignore_terminals: Arc<[Arc<TerminalDef>]>,
+    /// Memoized list of `(offset, line)` positions at which a terminal should be probed,
+    /// starting from `self.start` after greedily skipping leading ignored terminals.
+    ///
+    /// The trajectory depends only on `start` / `line` and the (fixed) ignore set -- never on
+    /// which terminal is being peeked -- so it is shared across all peeks at the current
+    /// position and rebuild only when `commit_token_match` advances the cursor. This avoids
+    /// re-running the whitespace/ignores regexes once per expected terminal in every column.
+    skip_cache: RefCell<Option<Vec<(usize, usize)>>>,
 }
 
 impl Tokenizer {
     /// Creates a tokenizer from input text, terminal definitions, and ignored terminal symbols.
     pub(crate) fn new(
         text: Arc<str>,
-        sym_terminal_def: Arc<HashMap<Arc<Symbol>, Arc<TerminalDef>>>,
+        sym_terminal_def: Arc<FxHashMap<Arc<Symbol>, Arc<TerminalDef>>>,
         ignore_terminals: Arc<[Arc<TerminalDef>]>,
     ) -> Self {
         let len = text.len();
@@ -312,6 +357,7 @@ impl Tokenizer {
             len,
             sym_terminal_def,
             ignore_terminals,
+            skip_cache: RefCell::new(None),
         }
     }
 
@@ -333,9 +379,66 @@ impl Tokenizer {
     }
 
     pub(crate) fn commit_token_match(&mut self, token_match: &TokenMatch) {
-        self.start = token_match.next_start;
-        self.line = token_match.next_line;
+        self.commit_position(token_match.next_start, token_match.next_line);
     }
+
+    /// Advances the cursor to `(next_start, next_line)` and invalidates the skip cache.
+    pub(crate) fn commit_position(&mut self, next_start: usize, next_end: usize) {
+        self.start = next_start;
+        self.line = next_end;
+        // Cursor moved -- the cached skip trajectory no longer applies.
+        *self.skip_cache.get_mut() = None;
+    }
+
+    /// Builds an owned token over the shared source buffer (cheap `Arc` refcount bumps only).
+    pub(crate) fn build_token(
+        &self,
+        start: usize,
+        end: usize,
+        line: usize,
+        terminal: &Arc<Symbol>,
+    ) -> Arc<Token> {
+        Arc::new(Token::new(
+            self.text.clone(),
+            start,
+            end,
+            line,
+            terminal.clone(),
+        ))
+    }
+
+    /// Builds the probe trajectory from `self.start`: every `(offset, line)` at which a
+    /// terminal is attempted, walking forward past leading ignored terminals. Mirrors the
+    /// original per-call skip loop exactly, but is computed once and cached.
+    fn skip_trajectory(&self) -> Vec<(usize, usize)> {
+        let mut traj = vec![];
+        let mut start = self.start;
+        let mut line = self.line;
+
+        while start < self.len {
+            traj.push((start, line));
+
+            let slice_text = &self.text[start..self.len];
+            let mut advanced = false;
+            for term_def in self.ignore_terminals.iter() {
+                if let Some((mt_end, _)) = term_def.pattern.capture(slice_text) {
+                    if term_def.name.as_ref().as_str() == "_NL" {
+                        line += 1;
+                    }
+                    start += mt_end;
+                    advanced = true;
+                    break;
+                }
+            }
+
+            if !advanced {
+                break;
+            }
+        }
+        traj
+    }
+
+
 
     fn line_column(&self, location: usize) -> (usize, usize) {
         let prefix = &self.text[..location];
@@ -348,63 +451,60 @@ impl Tokenizer {
         (line, column)
     }
 
-    pub(crate) fn peek_token_with_next_symbol(
+    /// Probes for `next_symbols` at the current cursor without allocating a `Token`.
+    ///
+    /// Returns the match offsets and metadata, or `None` if the terminal does not match.
+    /// The skip trajectory (post-ignore probe positions) is computed once per cursor position
+    /// and shared all terminals peeked there.
+    pub(crate) fn peek_probe(
         &self,
         next_symbols: &Arc<Symbol>,
-    ) -> Result<Option<TokenMatch>, SwiftletError> {
-        let Some(terminal) = self.sym_terminal_def.get(next_symbols) else {
-            return Ok(None);
-        };
+    ) -> Option<TokenProbe> {
+        let terminal = self.sym_terminal_def.get(next_symbols)?;
+        if self.skip_cache.borrow().is_none() {
+            let traj = self.skip_trajectory();
+            *self.skip_cache.borrow_mut() = Some(traj);
+        }
 
-        let mut start = self.start;
-        let mut line = self.line;
+        let cache = self.skip_cache.borrow();
+        let trajectory = cache.as_ref().expect("skip trajectory just populated");
 
-        while start < self.len {
-            let slice_text = &self.text[start..];
-
-            if let Some((mt_end, _)) = terminal.capture(slice_text) {
+        for &(start, line) in trajectory.iter() {
+            if let Some((mt_end, _)) = terminal.capture(&self.text[start..]) {
+                let next_start = start + mt_end;
                 let next_line = if terminal.name.as_ref().as_str() == "_NL" {
                     line + 1
                 } else {
                     line
                 };
-                return Ok(Some(TokenMatch {
-                    token: Arc::new(Token::new(
-                        self.text.clone(),
-                        start,
-                        start + mt_end,
-                        line,
-                        terminal.name.clone(),
-                    )),
-                    next_start: start + mt_end,
+                return Some(TokenProbe {
+                    start,
+                    line,
+                    next_start,
                     next_line,
-                }));
-            }
-
-            let mut ignored = false;
-            for term_def in self.ignore_terminals.iter() {
-                if let Some((mt_end, _)) = term_def.pattern.capture(slice_text) {
-                    if term_def.name.as_ref().as_str() == "_NL" {
-                        line += 1;
-                    }
-                    start += mt_end;
-                    ignored = true;
-                    break;
-                }
-            }
-
-            if !ignored {
-                return Ok(None);
+                    priority: terminal.priority
+                });
             }
         }
+        None
+    }
 
-        Ok(None)
+    pub(crate) fn peek_token_with_next_symbol(
+        &self,
+        next_symbols: &Arc<Symbol>) -> Result<Option<TokenMatch>, SwiftletError> {
+        Ok(
+            self.peek_probe(next_symbols).map(|probe| TokenMatch {
+                token: self.build_token(probe.start, probe.next_start, probe.line, next_symbols),
+                next_start: probe.next_start,
+                next_line: probe.next_line
+            })
+        )
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct LexerConf {
-    sym_terminal_def: Arc<HashMap<Arc<Symbol>, Arc<TerminalDef>>>,
+    sym_terminal_def: Arc<FxHashMap<Arc<Symbol>, Arc<TerminalDef>>>,
 }
 
 impl LexerConf {
@@ -413,7 +513,7 @@ impl LexerConf {
         let it = terminals
             .iter()
             .map(|terminal_def| (terminal_def.name.clone(), terminal_def.clone()));
-        let sym_terminal_def = HashMap::from_iter(it);
+        let sym_terminal_def = FxHashMap::from_iter(it);
 
         Self {
             sym_terminal_def: Arc::new(sym_terminal_def),
@@ -502,10 +602,10 @@ mod tests {
             Arc::new(Symbol::Terminal("WORD".to_string())),
         );
 
-        assert_eq!(tk.get_start(), 6);
-        assert_eq!(tk.get_end(), 10);
-        assert_eq!(tk.get_line(), 3);
-        assert_eq!(tk.get_terminal(), "WORD".to_string());
+        assert_eq!(tk.start(), 6);
+        assert_eq!(tk.end(), 10);
+        assert_eq!(tk.line(), 3);
+        assert_eq!(tk.terminal(), "WORD".to_string());
         assert_eq!(tk.word(), "beta");
     }
 

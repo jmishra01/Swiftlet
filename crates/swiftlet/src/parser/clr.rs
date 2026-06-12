@@ -28,9 +28,9 @@ pub(crate) type GoTo = HashMap<(usize, Arc<Symbol>), usize>;
 pub(crate) type First = HashMap<Arc<Symbol>, SymbolSet>;
 type ItemSetKey = Vec<(usize, usize, bool, String)>;
 
-/// Describes a parser table action for the CLR automaton.
+/// Describes a parser table action for the CLR automaton (internal use only).
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub enum ParseAction {
+pub(crate) enum ParseAction {
     Shift(usize),
     Reduce(usize),
     Accepted,
@@ -381,15 +381,14 @@ impl ClrParser {
             };
 
             let Some(priority) = priority else {
-                let conflict = lr_table
+                let actions = lr_table
                     .iter()
                     .map(|x| x.name())
                     .collect::<Vec<String>>()
                     .join("-");
 
                 return Err(ParseError::Conflict {
-                    lr_table: lr_table.clone(),
-                    conflict,
+                    description: format!("Shift-Reduce conflict [{actions}]")
                 }
                 .into());
             };
@@ -410,17 +409,13 @@ impl ClrParser {
                 };
 
                 if other_priority == Some(priority) {
-                    let conflict = lr_table
+                    let actions = lr_table
                         .iter()
                         .map(|x| x.name())
                         .collect::<Vec<String>>()
                         .join("-");
 
-                    return Err(ParseError::Conflict {
-                        lr_table: lr_table.clone(),
-                        conflict,
-                    }
-                    .into());
+                    return Err(ParseError::Conflict { description: format!("Shift-Reduce conflict [{actions}]") }.into());
                 }
             }
 
@@ -433,15 +428,14 @@ impl ClrParser {
         if let Some(best_action) = best_action {
             Ok(best_action)
         } else {
-            let conflict = lr_table
+            let actions = lr_table
                 .iter()
                 .map(|x| x.name())
                 .collect::<Vec<String>>()
                 .join("-");
 
             Err(ParseError::Conflict {
-                lr_table: lr_table.clone(),
-                conflict,
+                description: format!("unresolved conflict [{actions}]")
             }
             .into())
         }
@@ -495,7 +489,7 @@ impl ClrParser {
         for _ in 0..rule.expansion.len() {
             stack_states.pop();
             let ast = stack_symbols.pop().unwrap();
-            if ast.is_hidden() {
+            if ast.is_suppressed() {
                 match ast {
                     Ast::Tree(_, child) => children.extend(child.into_iter().rev()),
                     Ast::Token(_) => continue,
@@ -526,7 +520,7 @@ impl ClrParser {
         {
             stack_states.push(*goto_state);
         } else {
-            return Err(ParseError::Transition(rule.origin.clone()).into());
+            return Err(ParseError::Transition(rule.origin.as_str().to_string()).into());
         }
         Ok(true)
     }

@@ -1,8 +1,4 @@
-use crate::lexer::Symbol;
-use crate::parser::clr::ParseAction;
-use indexmap::IndexSet;
 use std::io;
-use std::sync::Arc;
 use thiserror::Error;
 
 /// Errors produced while loading or transforming grammars.
@@ -35,14 +31,14 @@ pub enum LexerError {
 /// Errors produced while constructing parse tables or parsing token streams.
 #[derive(Debug, Error)]
 pub enum ParseError {
-    #[error("{conflict} conflict: {lr_table:?}\nFor more information, run with debug: true.")]
-    Conflict {
-        lr_table: IndexSet<ParseAction>,
-        conflict: String,
-    },
+    /// A Shift/reduce or reduce/reduce conflict was found in the grammar.
+    /// `description` contains the conflict type and the involved actions formatted as a string.
+    /// For full detail, rebuild with `debug: true`
+    #[error("Parser conflict: {description:?}\nFor more information, run with debug: true.")]
+    Conflict { description: String },
     #[error("Didn't find transition for non-terminal: {0:?}")]
-    Transition(Arc<Symbol>),
-    #[error("Failed to parser input text: \"{0}\"")]
+    Transition(String),
+    #[error("Failed to parse input text: \"{0}\"")]
     FailedToParse(String),
     #[error("Didn't find any rule for word: \"{0}\" in the given grammar.")]
     RuleNotFound(String),
