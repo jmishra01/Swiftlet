@@ -691,4 +691,52 @@ mod tests {
         assert!(!nt.is_terminal());
         assert!(t.is_terminal());
     }
+
+    #[test]
+    fn symbol_terminal_starts_with_works() {
+        let t = Symbol::Terminal("INT".to_string());
+        assert!(t.starts_with("IN"));
+        assert!(!t.starts_with("int"));
+    }
+
+    #[test]
+    fn symbol_display_works_for_both_variants() {
+        let term = Symbol::Terminal("INT".to_string());
+        let non_term = Symbol::NonTerminal("expr".to_string());
+        assert_eq!(format!("{}", term), "INT");
+        assert_eq!(format!("{}", non_term), "expr");
+    }
+
+    #[test]
+    fn symbol_debug_formats_non_terminal_correctly() {
+        let non_term = Symbol::NonTerminal("expr".to_string());
+        assert_eq!(format!("{:?}", non_term), "NonTerminal(expr)");
+    }
+
+    #[test]
+    fn terminal_def_partial_eq_compares_name_and_value() {
+        let a = TerminalDef::with_string("PLUS", "+", 0);
+        let b = TerminalDef::with_string("PLUS", "+", 0);
+        let different_name = TerminalDef::with_string("MINUS", "+", 0);
+        let different_value = TerminalDef::with_string("PLUS", "-", 0);
+        assert_eq!(a, b);
+        assert_ne!(a, different_name);
+        assert_ne!(a, different_value);
+    }
+
+    #[test]
+    fn token_can_be_used_as_hash_map_key() {
+        use std::collections::HashSet;
+        let source = Arc::<str>::from("hello world");
+        let sym = Arc::new(Symbol::Terminal("WORD".to_string()));
+        let tok1 = Token::new(source.clone(), 0, 5, 0, sym.clone());
+        let tok2 = Token::new(source.clone(), 0, 5, 0, sym.clone());
+        let tok3 = Token::new(source.clone(), 6, 11, 0, sym.clone());
+
+        let mut set = HashSet::new();
+        set.insert(tok1);
+        set.insert(tok2); // duplicate — should not grow the set
+        set.insert(tok3);
+        assert_eq!(set.len(), 2);
+    }
 }

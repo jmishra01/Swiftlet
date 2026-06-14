@@ -188,3 +188,64 @@ impl Parser {
         self.parser_engine.parse(text)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ambiguity_display_works_for_both_variants() {
+        assert_eq!(format!("{}", Ambiguity::Resolve), "resolve");
+        assert_eq!(format!("{}", Ambiguity::Explicit), "explicit");
+    }
+
+    #[test]
+    fn parser_config_display_contains_all_fields() {
+        let config = ParserConfig::default();
+        let s = format!("{}", config);
+        assert!(s.contains("start"));
+        assert!(s.contains("Earley"));
+        assert!(s.contains("resolve"));
+        assert!(s.contains("false"));
+    }
+
+    #[test]
+    fn parser_config_debug_is_derivable() {
+        let config = ParserConfig::default();
+        let debug_str = format!("{:?}", config);
+        assert!(debug_str.contains("ParserConfig"));
+    }
+
+    #[test]
+    fn from_file_returns_error_for_missing_path() {
+        let path = std::env::temp_dir()
+            .join("swiftlet_nonexistent_test_grammar.lark")
+            .to_string_lossy()
+            .into_owned();
+        let err = match Swiftlet::from_file(&path) {
+            Ok(_) => panic!("expected error for missing file"),
+            Err(e) => e,
+        };
+        assert!(matches!(
+            err,
+            error::SwiftletError::GrammarFileReadError { .. }
+        ));
+    }
+
+    #[test]
+    fn from_file_loads_valid_grammar_file() {
+        use std::io::Write;
+        let grammar = "start: WORD\nWORD: /\\w+/\n";
+        let path = std::env::temp_dir().join("swiftlet_test_grammar_valid.lark");
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(grammar.as_bytes()).unwrap();
+
+        let swiftlet = Swiftlet::from_file(path.to_str().unwrap())
+            .expect("valid grammar file should load");
+        let result = swiftlet
+            .parser(ParserConfig::default())
+            .parse("hello");
+        assert!(result.is_ok());
+        std::fs::remove_file(path).ok();
+    }
+}

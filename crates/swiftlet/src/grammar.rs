@@ -204,4 +204,37 @@ mod tests {
         assert_eq!(rules[&expr].len(), 2);
         assert!(rules[&expr][0].is_expand());
     }
+
+    #[test]
+    fn algorithm_display_works_for_both_variants() {
+        assert_eq!(format!("{}", Algorithm::Earley), "Earley");
+        assert_eq!(format!("{}", Algorithm::CLR), "CLR");
+    }
+
+    #[test]
+    fn rule_origin_expansion_and_priority_accessors_work() {
+        let origin = Arc::new(Symbol::NonTerminal("start".to_string()));
+        let sym = Arc::new(Symbol::Terminal("INT".to_string()));
+        let rule = Rule::new(
+            origin.clone(),
+            vec![sym.clone()],
+            Arc::new(RuleMeta::new(false, 5, None)),
+            0,
+        );
+
+        assert_eq!(rule.origin().as_str(), "start");
+        assert_eq!(rule.expansion().len(), 1);
+        assert_eq!(rule.expansion()[0].as_str(), "INT");
+        assert_eq!(rule.priority(), 5);
+    }
+
+    #[test]
+    fn rule_meta_alias_rule_accessor_works() {
+        let aliases = vec!["add".to_string(), "sub".to_string()];
+        let meta = RuleMeta::new(false, 0, Some(aliases.clone()));
+        assert_eq!(meta.alias_rule(), Some(aliases.as_slice()));
+
+        let no_alias = RuleMeta::new(false, 0, None);
+        assert_eq!(no_alias.alias_rule(), None);
+    }
 }

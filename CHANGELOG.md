@@ -1,12 +1,28 @@
 # Changelog
 
-### v0.2.1 - 2026-06-14
+### Rust: v0.2.2 & Python: v0.2.1 - 2026-06-14
 
 Changes in `v0.2.0..v0.2.1`
 
 ### Added
-- ****
+Performance
+- Leo optimization for Earley parser — Joop Leo's right-recursive optimization reduces parsing time for right-recursive grammars from O(n³) to O(n), dramatically improving throughput on large inputs.
+- Tokenizer skip-cache — Introduced TokenProbe and a memoized skip_trajectory in the Tokenizer; the whitespace/ignore skip pass is now computed once per cursor position and reused for every terminal peeked at that position, eliminating redundant regex scans.
+- FxHashMap for CLR tables — Replaced std::collections::HashMap with rustc_hash::FxHashMap in CLR StateSymbol, Action, and GoTo tables for faster table lookup during parsing.
+- FIRST-set type alias (SymbolSet) — CLR get_first now returns &SymbolSet (an IndexSet-backed alias) instead of &HashSet<Arc<Symbol>>, providing deterministic iteration order in conflict-resolution paths.
 
+Features
+- debug flag on ParserConfig — Setting config.debug = true now prints the BNF grammar, canonical LR items, transition table, action table, and goto table to stdout during CLR parser construction (gated behind #[cfg(feature = "debug")]).
+- re-parser crate — Added a new internal regex AST parser (crates/re-parser) that computes min_width / max_width for terminal patterns, enabling the lexer to skip provably-too-short and provably-too-long candidates more aggressively.
+- Display for Ambiguity — Ambiguity::Resolve and Ambiguity::Explicit now implement Display, printing "resolve" and "explicit" respectively.
+
+Visibility / API hygiene
+- Several internal items narrowed from pub to pub(crate) (ParserEngine, fields in engine.rs, load_grammar.rs, clr.rs) to shrink the accidental public surface.
+
+Documentation
+- README updated with Crates.io badges.
+- Python notebooks (comparison.ipynb, swiftlet.ipynb) updated.
+- sql_query_parser example added to crates/swiftlet/examples/.
 
 
 

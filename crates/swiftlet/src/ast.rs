@@ -348,4 +348,20 @@ mod tests {
         token.print();
         tree.pretty_print();
     }
+
+    #[test]
+    fn tree_name_returns_none_for_token_nodes() {
+        let tok = token_ast("hello", "ID");
+        assert_eq!(tok.tree_name(), None);
+    }
+
+    #[test]
+    fn is_anonymous_detects_double_underscore_prefix_for_tree_nodes() {
+        let anon = Ast::Tree("__raw".to_string(), vec![]);
+        let hidden = Ast::Tree("_hidden".to_string(), vec![]);
+        let normal = Ast::Tree("expr".to_string(), vec![]);
+        assert!(anon.is_anonymous());
+        assert!(!hidden.is_anonymous());
+        assert!(!normal.is_anonymous());
+    }
 }
