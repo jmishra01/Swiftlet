@@ -139,7 +139,9 @@ venv.bak/
 # performance
 *.gz
 
+# AI
 CLAUDE.md
+.ai/
 
 # Few md files
 TODO.md

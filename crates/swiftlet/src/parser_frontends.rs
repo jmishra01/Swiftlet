@@ -7,7 +7,7 @@ use std::sync::Arc;
 /// Stores grammar rules, ignore directives, and cached rule expansions.
 #[derive(Debug)]
 pub struct GrammarRules {
-    rules: FxHashMap<Arc<Symbol>, Vec<Arc<Rule>>>,
+    pub(crate) rules: FxHashMap<Arc<Symbol>, Vec<Arc<Rule>>>,
     ignore_symbols: Arc<FxHashSet<Arc<Symbol>>>,
     all_expansions: Vec<Arc<Rule>>,
 }

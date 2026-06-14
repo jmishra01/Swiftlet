@@ -190,7 +190,6 @@ impl ClrParser {
 
         #[cfg(feature = "debug")]
         if parser_conf.debug {
-            debug_clr_rules(&rules);
             debug_first_set(&first);
         }
 
@@ -788,17 +787,6 @@ pub(crate) fn first_set(rules: &[Arc<Rule>]) -> First {
 
 // ---------------- CLR Debug ---------------- //
 /// Prints numbered rules for debug tracing.
-#[cfg(feature = "debug")]
-#[inline]
-fn debug_clr_rules(rules: &[Arc<Rule>]) {
-    println!("\nList of Rules in BNF format.");
-    println!("============================");
-
-    for (index, rule) in rules.iter().enumerate() {
-        println!("\t{:>2}; {}", index, rule);
-    }
-    println!();
-}
 
 #[cfg(feature = "debug")]
 #[inline]

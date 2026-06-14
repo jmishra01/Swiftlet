@@ -75,14 +75,14 @@ fn bench_func(c: &mut Criterion) {
     for (i, (grammar, text)) in GRAMMAR_AND_TEXT.iter().enumerate() {
         // ------- CLR -------- //
         let clr_bench_name = format!("Grammar {} | CLR Parser", i);
-        c.bench_function(clr_bench_name.as_str(), |b| {
+        let conf = Arc::new(ParserConfig {
+            algorithm: Algorithm::CLR,
+            ..Default::default()
+        });
+        c.bench_function(clr_bench_name.as_str(), move |b| {
             b.iter(|| {
-                let conf = Arc::new(ParserConfig {
-                    algorithm: Algorithm::CLR,
-                    ..Default::default()
-                });
                 if let Ok(clr_parser) =
-                    Swiftlet::from_str(grammar).map(|grammar| grammar.parser(conf))
+                    Swiftlet::from_str(grammar).map(|grammar| grammar.parser(conf.clone()))
                 {
                     let _ = clr_parser.parse(text);
                 }
@@ -91,11 +91,11 @@ fn bench_func(c: &mut Criterion) {
 
         // ------- EARLEY -------- //
         let earley_bench_name = format!("Grammar {} | EARLEY Parser", i);
-        c.bench_function(earley_bench_name.as_str(), |b| {
+        let conf = Arc::new(ParserConfig::default());
+        c.bench_function(earley_bench_name.as_str(), move |b| {
             b.iter(|| {
-                let conf = Arc::new(ParserConfig::default());
                 if let Ok(parser) =
-                    Swiftlet::from_str(grammar).map(|grammar| grammar.parser(conf))
+                    Swiftlet::from_str(grammar).map(|grammar| grammar.parser(conf.clone()))
                 {
                     let _ = parser.parse(text);
                 }

@@ -36,7 +36,7 @@ def main():
     """
 
     text = "12 + 10 - 8 * 2 + 4"
-    parser = Swiftlet(grammar)
+    parser = Swiftlet(grammar, debug=True, algorithm="clr")
     parsed_text = parser.parse(text)
 
     calculate = Calculate()

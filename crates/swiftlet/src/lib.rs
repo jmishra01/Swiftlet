@@ -157,8 +157,22 @@ impl Swiftlet {
     /// swiftlet.parser(Arc::new(ParserConfig::default())   // existing Arc
     /// ```
     pub fn parser(&self, config: impl Into<Arc<ParserConfig>>) -> Parser {
+        let config = config.into();
+        #[cfg(feature = "debug")]
+        if config.debug {
+            println!("\nBNF Grammar");
+            println!("===========");
+            let rules = self.frontend.get_parser().rules.clone();
+
+            for (_, v) in &rules {
+                for rule in v {
+                    println!("{}", rule);
+                }
+            }
+        }
+
         Parser {
-            parser_engine: ParserEngine::new(self.frontend.clone(), config.into()),
+            parser_engine: ParserEngine::new(self.frontend.clone(), config),
         }
     }
 }
