@@ -1,6 +1,6 @@
 [package]
 name = "pyswiftlet"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 
 [lib]
@@ -9,4 +9,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.28.3", features = ["extension-module", "abi3-py310"] }
-swiftlet = {workspace = true, features = ["debug"]}
+swiftlet = {path="../crates/swiftlet", version = "0.2.2", features = ["debug"]}
