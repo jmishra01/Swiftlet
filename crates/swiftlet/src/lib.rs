@@ -152,9 +152,9 @@ impl Swiftlet {
     /// Builds a parser instance for the given configuration.
     ///
     /// Accepts `ParserConfig` by value, by reference clone, or as `Arc<ParserConfig>`
-    /// ``ìgnore
+    /// ```ignore
     /// swiftlet.parser(ParserConfig::default())            // by value
-    /// swiftlet.parser(Arc::new(ParserConfig::default())   // existing Arc
+    /// swiftlet.parser(Arc::new(ParserConfig::default()))   // existing Arc
     /// ```
     pub fn parser(&self, config: impl Into<Arc<ParserConfig>>) -> Parser {
         let config = config.into();

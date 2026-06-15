@@ -172,7 +172,7 @@ impl Ast {
     ///
     /// `pred` receives the node itself, so it can inspect both `Tree` names and `Token` terminals.
     ///
-    /// ``ìgnore
+    /// ```ignore
     /// let exprs: Vec<_> = ast.find_pred(|n| n.tree_name() == Some("expr")).collect();
     /// ```
     pub fn find_pred<'a, F>(&'a self, predicate: F) -> impl Iterator<Item = &'a Ast> + 'a
