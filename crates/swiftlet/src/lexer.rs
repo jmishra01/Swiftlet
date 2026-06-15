@@ -89,12 +89,16 @@ impl Pattern {
     }
 }
 
+/// Regex compilation flags passed to [`TerminalDef::with_regex`]
+///
+/// Each field corresponds to a standard regex modifier flag.
+/// The default enables only Unicode mode (`u = true`).
 #[derive(Debug, Clone)]
 pub(crate) struct RegexFlag {
     pub(crate) i: bool, // Case-insensitive
     pub(crate) m: bool, // Multi-line
     pub(crate) s: bool, // Dot matches all
-    pub(crate) u: bool, // unicode matching
+    pub(crate) u: bool, // Unicode matching
     pub(crate) x: bool, // verbose
 }
 
@@ -361,14 +365,17 @@ impl Tokenizer {
         }
     }
 
+    /// Returns the current cursor byte offset in the source text.
     pub(crate) fn get_start(&self) -> usize {
         self.start
     }
 
+    /// Returns the `(line, column)` pair for the current cursor position.
     pub(crate) fn get_line_column(&self) -> (usize, usize) {
         self.line_column(self.start)
     }
 
+    /// Looks up a terminal definition by symbol reference, returning `None` if not registered.
     pub(crate) fn get_terminal_def(&self, name: &Arc<Symbol>) -> Option<&Arc<TerminalDef>> {
         self.sym_terminal_def.get(name)
     }
@@ -378,6 +385,7 @@ impl Tokenizer {
         &self.text
     }
 
+    /// Advances the cursor to the positioned recorded in `token_match` and invalidates the skip cache.
     pub(crate) fn commit_token_match(&mut self, token_match: &TokenMatch) {
         self.commit_position(token_match.next_start, token_match.next_line);
     }
@@ -489,6 +497,11 @@ impl Tokenizer {
         None
     }
 
+    /// Probes for `next_symbols` at the current cursor, returning a full `TokenMatch` on success.
+    ///
+    /// Unlike [`peek_probe`](Self::peek_probe), this allocates the `Arc<Token>` and bundles it with
+    /// cursor metadata. Prefer `peek_probe` in hot paths where only the winning terminal will be
+    /// committed.
     pub(crate) fn peek_token_with_next_symbol(
         &self,
         next_symbols: &Arc<Symbol>) -> Result<Option<TokenMatch>, SwiftletError> {
@@ -502,6 +515,7 @@ impl Tokenizer {
     }
 }
 
+/// Holds the symbol-to-[`TerminalDef`] lookup table used to configure a [`Tokenizer`].
 #[derive(Debug)]
 pub(crate) struct LexerConf {
     sym_terminal_def: Arc<FxHashMap<Arc<Symbol>, Arc<TerminalDef>>>,
@@ -520,6 +534,7 @@ impl LexerConf {
         }
     }
 
+    /// Returns the [`TerminalDef`] registered for `name`, or `None` if unknown.
     pub(crate) fn get_terminal_def(&self, name: &Arc<Symbol>) -> Option<&Arc<TerminalDef>> {
         self.sym_terminal_def.get(name)
     }

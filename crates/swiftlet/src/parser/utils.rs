@@ -5,15 +5,18 @@ use std::sync::Arc;
 pub fn dot_state(rule: &Arc<Rule>, dot: usize) -> (String, String, String) {
     let origin = rule.origin.as_ref().as_str().to_string();
 
-    let mut before_dot = "".to_string();
-    let mut after_dot = "".to_string();
+    let total = rule.expansion.len();
+    let mut before_dot = String::with_capacity(dot * 8);
+    let mut after_dot = String::with_capacity(total.saturating_sub(dot) * 8);
 
     for (index, prod) in rule.expansion.iter().enumerate() {
+        let s = prod.as_ref().as_str();
         if index < dot {
-            before_dot = format!("{} {}", before_dot, prod.as_ref().as_str());
-        }
-        if index >= dot {
-            after_dot = format!("{} {}", after_dot, prod.as_ref().as_str());
+            before_dot.push(' ');
+            before_dot.push_str(s);
+        } else {
+            after_dot.push(' ');
+            after_dot.push_str(s);
         }
     }
 

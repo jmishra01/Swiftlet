@@ -556,7 +556,7 @@ impl EarleyParser {
 
     /// Applies the hidden / expand / alias tree-transformation rules to a completed rule's
     /// child sequence, yielding the node(s) it contributes to its parent. Shared by chart-item
-    /// completion and Leo-chain reconstribution (which synthesizes items not present in the chart).
+    /// completion and Leo-chain recontribution (which synthesizes items not present in the chart).
     fn wrap_contribution(
         &self,
         rule: &Rule,

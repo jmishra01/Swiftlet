@@ -13,6 +13,10 @@ static REGEX_FLAGS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/[imsux]*$")
 pub type OptVecStr = Option<Vec<String>>;
 pub type OptStr = Option<String>;
 
+/// Recursively collects all leaf token values from an AST subtree.
+///
+/// Double-quoted strings have their surrounding quotes stripped; bare tokens are
+/// returned as-is. Used to extract imported/ignored terminal names from grammar directives.
 pub(crate) fn fetch_terminals(ast: &Ast) -> Vec<String> {
     match ast {
         Ast::Tree(_, childs) => childs.iter().flat_map(fetch_terminals).collect::<Vec<_>>(),
@@ -27,6 +31,11 @@ pub(crate) fn fetch_terminals(ast: &Ast) -> Vec<String> {
     }
 }
 
+/// Compiles terminal AST nodes from a grammar parse tree into [`TerminalDef`] instances.
+///
+/// Walk through terminal declarations in order, resolving cross-references between them
+/// (e.g. when one terminal pattern references another by name). Build-in terminals supplied via
+/// `known_terminals` are available for lookup but not re-emitted.
 pub struct TerminalCompiler<'a> {
     terminals: Vec<&'a Ast>,
     map: HashMap<String, Arc<TerminalDef>>,
@@ -36,6 +45,8 @@ pub struct TerminalCompiler<'a> {
 }
 
 impl<'a> TerminalCompiler<'a> {
+    /// Creates a new compiler with the grammar's terminal AST nodes and any pre-resolved build-in
+    /// terminals that may be referenced by the grammar's patterns/
     pub fn new(
         terminals: Vec<&'a Ast>,
         known_terminals: HashMap<String, Arc<TerminalDef>>,
@@ -50,6 +61,8 @@ impl<'a> TerminalCompiler<'a> {
         }
     }
 
+    /// Returns the [`TerminalDef`]s produced by the most recent [`compile`](Self::compile) call,
+    /// in declaration order, excluding any pre-supplied built-in terminals.
     pub fn get_terminals(&self) -> Vec<Arc<TerminalDef>> {
         self.local_terminal_names
             .iter()
@@ -57,6 +70,9 @@ impl<'a> TerminalCompiler<'a> {
             .collect()
     }
 
+    /// Processes all terminal AST nodes in order, populating the internal definition map.
+    ///
+    /// Call [`get_terminals`](Self::get_terminals) afterward to retrieve the results.
     pub fn compile(&mut self) {
         while self.index < self.terminal_len {
             let terminal = self.terminals[self.index];
@@ -612,6 +628,10 @@ impl RuleCompiler {
         Some(vec![terminal_name])
     }
 
+    /// Transforms a list of grammar rule AST nodes, populating the internal rule and terminal maps.
+    ///
+    /// Call [`get_grammar`](Self::get_grammar) and [`get_terminal`](Self::get_terminal)
+    /// afterward to retrieve the results.
     pub fn compile(&mut self, tree: Vec<&Ast>) -> OptVecStr {
         let len = tree.len();
         for i in 0..len {

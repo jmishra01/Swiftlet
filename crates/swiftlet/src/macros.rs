@@ -1,3 +1,14 @@
+/// Creates an `Arc<TerminalDef>` from either a literal string or a regex pattern.
+///
+/// **String form** (`name`, `value`, `priority`)
+/// ```ignore
+/// let plus = terminal_def!("PLUS", "+", 0);
+/// ```
+///
+/// **Regex form** (`name`, `pattern`, `flags`, `priority`);
+/// ```ignore
+/// let int = terminal_def!("INT", r"\d+", RegexFlag::default(), 0);
+/// ```
 #[macro_export]
 macro_rules! terminal_def {
     ($x:expr, $y:expr, $n:expr) => {
@@ -9,6 +20,12 @@ macro_rules! terminal_def {
     };
 }
 
+/// Wraps a string in `Ac<Symbol::Terminal>`.
+///
+/// ```ignore
+/// let sym = terms!("INT");
+/// assert!(sym.is_terminal());
+/// ```
 #[macro_export]
 macro_rules! terms {
     ($t:expr) => {
@@ -16,6 +33,12 @@ macro_rules! terms {
     };
 }
 
+/// Wraps a string in `Arc<Symbol::NonTerminal>`.
+///
+/// ```ignore
+/// let sym = non_terms!("expr");
+/// assert!(!sym.is_terminal());
+/// ```
 #[macro_export]
 macro_rules! non_terms {
     ($t:expr) => {

@@ -39,11 +39,11 @@ pub(crate) enum ParseAction {
 
 impl ParseAction {
     /// Returns action kind label.
-    fn name(&self) -> String {
+    fn name(&self) -> &'static str {
         match self {
-            ParseAction::Shift(_) => "Shift".to_string(),
-            ParseAction::Reduce(_) => "Reduce".to_string(),
-            ParseAction::Accepted => "Accepted".to_string(),
+            ParseAction::Shift(_) => "Shift",
+            ParseAction::Reduce(_) => "Reduce",
+            ParseAction::Accepted => "Accepted",
         }
     }
 }
@@ -515,6 +515,9 @@ impl ClrParser {
         Ok(true)
     }
 
+    /// Scans for the next token in `state` by probing all terminals expected there,
+    /// returning the highest-priority match. Returns an `$END` sentinel when no terminal matches,
+    /// signaling end-of-input to the shift/reduce loop.
     fn get_lookahead(
         &self,
         tokenizer: &mut Tokenizer,
@@ -574,6 +577,11 @@ impl ParserBackend for ClrParser {
         &self.parser_frontend
     }
 
+    /// Drives the CLR shift/reduce loop to completion, returning the root [`Ast`] node.
+    ///
+    /// Processes tokens one at a time using the precomputed ACTION and GOTO tables.
+    /// Returns an error if a shift-reduce conflict can't be resolved by priority, if a
+    /// required GOTO entry is missing, or if the input does not conform to the grammar.
     fn parse(&self, tokenizer: &mut Tokenizer) -> Result<Ast, SwiftletError> {
         let mut stack_states = vec![0usize];
         let mut stack_symbols = Vec::new();
@@ -770,10 +778,13 @@ pub(crate) fn first_set(rules: &[Arc<Rule>]) -> First {
                     let val = first.entry(e.clone()).or_default();
                     val.insert(e.clone());
                 } else if !first[e].is_empty() {
-                    let e_symbol_set: SymbolSet = first[e].iter().cloned().collect();
-                    let origin_symbol_set: &mut SymbolSet = first.get_mut(origin).unwrap();
-                    let val_len: usize = origin_symbol_set.len();
-                    origin_symbol_set.extend(e_symbol_set);
+                    // Collect into Vec (not SymbolSet) to avoid hashing the temp buffer;
+                    // two separate borrows of `first` are needed because `e` and `origin`
+                    // could be the same key.
+                    let e_symbols: Vec<Arc<Symbol>> = first[e].iter().cloned().collect();
+                    let origin_symbol_set  = first.get_mut(origin).unwrap();
+                    let val_len = origin_symbol_set.len();
+                    origin_symbol_set.extend(e_symbols);
                     added = (origin_symbol_set.len() > val_len) || added;
                 }
             }

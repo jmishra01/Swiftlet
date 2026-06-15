@@ -169,16 +169,15 @@ pub fn load_grammar(grammar: &str) -> Result<Arc<GrammarRuntime>, SwiftletError>
     };
 
     let mut update_terminals = |arg0: &String| {
-        if common_terminals.contains_key(arg0) {
-            terminals.push(common_terminals.get(arg0).unwrap().clone());
+        if let Some(t) = common_terminals.get(arg0) {
+            terminals.push(t.clone());
         } else {
             terminals.push(Arc::new(TerminalDef::with_regex(
                 arg0,
                 arg0,
                 RegexFlag::default(),
                 5
-            )
-            ));
+            )));
         }
     };
 

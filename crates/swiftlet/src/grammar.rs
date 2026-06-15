@@ -47,6 +47,7 @@ impl RuleMeta {
         self.priority
     }
 
+    // Returns the list of alias names attached to this rule, or `None` if no aliases were declared.
     pub(crate) fn alias_rule(&self) -> Option<&[String]> {
         self.alias_rule.as_deref()
     }
@@ -91,11 +92,12 @@ impl Rule {
         self.expand
     }
 
-    /// Returns whether this rule should be expanded (flattened) in the resulting AST.
+    /// Returns the non-terminal symbol this rule reduces to (the left-hand side).
     pub fn origin(&self) -> &Symbol {
         &self.origin
     }
 
+    // Returns the right-hand side symbols of this production.
     pub fn expansion(&self) -> &[Arc<Symbol>] {
         &self.expansion
     }
