@@ -1,8 +1,8 @@
 # Changelog
 
-### Rust: v0.2.3 & Python: v0.2.2 - 2026-06-14
+### Rust: v0.2.3 & Python: v0.2.2 - 2026-06-17
 
-Changes in `v0.2.2..v0.2.3`
+Changes in `v0.2.1..v0.2.2`
 
 ### Added
 
@@ -12,7 +12,7 @@ Performance
 
 ### Rust: v0.2.2 & Python: v0.2.1 - 2026-06-14
 
-Changes in `v0.2.1..v0.2.2`
+Changes in `v0.2.0..v0.2.1`
 
 ### Added
 Performance
