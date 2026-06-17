@@ -1,10 +1,16 @@
 use crate::lexer::{RegexFlag, TerminalDef};
 use crate::terminal_def;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+
+static COMMON_TERMINALS: LazyLock<HashMap<String, Arc<TerminalDef>>> = LazyLock::new(build_common_terminals);
+
+pub(crate) fn get_common_terminals() -> &'static HashMap<String, Arc<TerminalDef>> {
+    &COMMON_TERMINALS
+}
 
 /// Returns built-in terminal definitions available through `%import`.
-pub(crate) fn get_common_terminals() -> HashMap<String, Arc<TerminalDef>> {
+pub(crate) fn build_common_terminals() -> HashMap<String, Arc<TerminalDef>> {
     let digit = r"\d";
     let hex_digit = r"[a-fA-F0-9]+";
     let integer = r"\d+";

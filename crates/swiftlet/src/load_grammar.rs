@@ -168,6 +168,13 @@ pub fn load_grammar(grammar: &str) -> Result<Arc<GrammarRuntime>, SwiftletError>
         vec![]
     };
 
+    let ignores: Vec<String> = tree
+        .trees_named("ignore")
+        .map(|ignores| ignores.iter().flat_map(|t| fetch_terminals(t)).collect())
+        .unwrap_or_default();
+
+    terminals.reserve(ignores.len() + imported_terminals.len());
+
     let mut update_terminals = |arg0: &String| {
         if let Some(t) = common_terminals.get(arg0) {
             terminals.push(t.clone());
@@ -181,19 +188,8 @@ pub fn load_grammar(grammar: &str) -> Result<Arc<GrammarRuntime>, SwiftletError>
         }
     };
 
-    let ignores: Vec<String> = match tree.trees_named("ignore") {
-        Some(ignores) => {
-            ignores
-                .iter()
-                .map(|ignore| fetch_terminals(ignore))
-                .flatten()
-                .collect::<Vec<_>>()
-        },
-        None => vec![],
-    };
-    ignores.iter().for_each(&mut update_terminals);
+    ignores.iter().chain(imported_terminals.iter()).for_each(&mut update_terminals);
 
-    imported_terminals.iter().for_each(&mut update_terminals);
     let Some(rules) = tree.trees_named("rule") else {
         return Err(GrammarError::Parse(
             "grammar does not contain any rule definitions".to_string(),
@@ -204,12 +200,7 @@ pub fn load_grammar(grammar: &str) -> Result<Arc<GrammarRuntime>, SwiftletError>
 
     transformer.compile(rules);
 
-    let rules = match transformer.get_grammar() {
-        Ok(rules) => {
-            rules
-        },
-        Err(e) => return Err(e)
-    };
+    let rules = transformer.get_grammar()?;
 
     terminals.extend(transformer.get_terminal());
     terminals.sort_by(|first, second| {
