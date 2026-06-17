@@ -129,14 +129,14 @@ impl Ast {
     /// this subtree -- both `Tree` and `Token` variants.
     ///
     /// Use this as the building block for custom searches. For name-filtered tree-only
-    /// traveral prefer [`iter_trees`](Self::iter_trees)
+    /// traversal prefer [`iter_trees`](Self::iter_trees)
     pub fn iter_all(&self) -> AstDfsIter<'_> {
         AstDfsIter {stack: vec![self]}
     }
 
-    /// Returns a breadt-first iterators **every** node in this subtree.
+    /// Returns a breadth-first iterators **every** node in this subtree.
     ///
-    /// Each level is visted left-to-right before descending, so ancestors always
+    /// Each level is visited left-to-right before descending, so ancestors always
     /// appear before their descendants.
     pub fn iter_subtree(&self) -> AstBfsIter<'_> {
         let mut queue = VecDeque::new();
