@@ -12,8 +12,7 @@ use crate::{
     terms,
 };
 use indexmap::IndexSet;
-use rustc_hash::FxHashMap;
-use std::collections::HashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt::Display;
 use std::iter::Iterator;
 use std::sync::Arc;
@@ -21,9 +20,9 @@ use std::sync::Arc;
 // Type Alias
 pub(crate) type SymbolSet = IndexSet<Arc<Symbol>>;
 pub(crate) type SymbolMap = FxHashMap<Arc<Symbol>, Vec<(usize, Arc<Rule>)>>;
-pub(crate) type ItemSet = HashSet<Arc<ClrItem>>;
+pub(crate) type ItemSet = FxHashSet<Arc<ClrItem>>;
 pub(crate) type VecItemSet = Vec<ItemSet>;
-pub(crate) type StateSymbol = FxHashMap<usize, HashSet<Arc<Symbol>>>;
+pub(crate) type StateSymbol = FxHashMap<usize, FxHashSet<Arc<Symbol>>>;
 pub(crate) type Action = FxHashMap<(usize, Arc<Symbol>), IndexSet<ParseAction>>;
 pub(crate) type GoTo = FxHashMap<(usize, Arc<Symbol>), usize>;
 pub(crate) type First = FxHashMap<Arc<Symbol>, SymbolSet>;
@@ -178,7 +177,11 @@ pub struct ClrParser {
     pub(crate) first: First,
     action: Action,
     goto: GoTo,
+    #[allow(dead_code)]
     state_symbol: StateSymbol,
+    /// Terminals expected per state, sorted by priority desc then max_width desc.
+    /// Precomputed at construction so `get_lookahead` never re-sorts at parse time.
+    state_terminals: FxHashMap<usize, Vec<Arc<Symbol>>>,
 }
 
 impl ClrParser {
@@ -202,6 +205,7 @@ impl ClrParser {
             action: FxHashMap::default(),
             goto: FxHashMap::default(),
             state_symbol: FxHashMap::default(),
+            state_terminals: FxHashMap::default(),
         };
         let (canonical_items, transitions) = canonical_items(&mut clr);
 
@@ -210,7 +214,7 @@ impl ClrParser {
             debug_canonical_and_transtion_sets(&canonical_items, &transitions);
         }
 
-        let (action, goto, state_symbol) =
+        let (action, goto, state_symbol, state_terminals) =
             clr.build_action_and_goto_table(&canonical_items, &transitions);
 
         #[cfg(feature = "debug")]
@@ -290,6 +294,7 @@ impl ClrParser {
         clr.action = action;
         clr.goto = goto;
         clr.state_symbol = state_symbol;
+        clr.state_terminals = state_terminals;
 
         clr
     }
@@ -307,11 +312,13 @@ impl ClrParser {
 
     #[inline]
     /// Builds ACTION and GOTO tables from canonical items and transitions.
+    /// Also precomputes per-state terminal lists sorted by priority/max_width so
+    /// `get_lookahead` never needs to sort or allocate at parse time.
     fn build_action_and_goto_table(
         &self,
         canonical_items: &VecItemSet,
         transition: &GoTo,
-    ) -> (Action, GoTo, StateSymbol) {
+    ) -> (Action, GoTo, StateSymbol, FxHashMap<usize, Vec<Arc<Symbol>>>) {
         let mut action: Action = FxHashMap::default();
         let mut goto: GoTo = FxHashMap::default();
         let mut state_symbol: StateSymbol = FxHashMap::default();
@@ -357,7 +364,27 @@ impl ClrParser {
                 }
             }
         }
-        (action, goto, state_symbol)
+
+        let lexer = self.parser_frontend.get_lexer();
+        let mut state_terminals: FxHashMap<usize, Vec<Arc<Symbol>>> =
+            FxHashMap::with_capacity_and_hasher(state_symbol.len(), Default::default());
+        for (idx, symbols) in &state_symbol {
+            let mut sorted: Vec<Arc<Symbol>> = symbols
+                .iter()
+                .filter(|sym| lexer.get_terminal_def(sym).is_some())
+                .cloned()
+                .collect();
+            sorted.sort_by(|a, b| {
+                let da = lexer.get_terminal_def(a).unwrap();
+                let db = lexer.get_terminal_def(b).unwrap();
+                db.priority
+                    .cmp(&da.priority)
+                    .then(db.max_width.cmp(&da.max_width))
+            });
+            state_terminals.insert(*idx, sorted);
+        }
+
+        (action, goto, state_symbol, state_terminals)
     }
 
     /// Resolves a parser action from a possible conflict set using priorities.
@@ -368,11 +395,8 @@ impl ClrParser {
         if lr_table.len() == 1 {
             return Ok(lr_table.first().unwrap());
         }
-        let conflict_label = lr_table
-            .iter()
-            .map(|x| x.name())
-            .collect::<Vec<_>>()
-            .join("-");
+        let conflict_label =
+            || lr_table.iter().map(|x| x.name()).collect::<Vec<_>>().join("-");
         let mut best_action = None;
         let mut best_priority = 0usize;
 
@@ -387,7 +411,7 @@ impl ClrParser {
 
             let Some(priority) = priority else {
                 return Err(ParseError::Conflict {
-                    description: format!("Shift-Reduce conflict [{}]", conflict_label)
+                    description: format!("Shift-Reduce conflict [{}]", conflict_label()),
                 }
                 .into());
             };
@@ -409,7 +433,7 @@ impl ClrParser {
 
                 if other_priority == Some(priority) {
                     return Err(ParseError::Conflict {
-                        description: format!("Shift-Reduce conflict [{}]", conflict_label),
+                        description: format!("Shift-Reduce conflict [{}]", conflict_label()),
                     }
                     .into());
                 }
@@ -425,7 +449,7 @@ impl ClrParser {
             Ok(best_action)
         } else {
             Err(ParseError::Conflict {
-                description: format!("unresolved conflict [{}]", conflict_label),
+                description: format!("unresolved conflict [{}]", conflict_label()),
             }
             .into())
         }
@@ -518,48 +542,39 @@ impl ClrParser {
     /// Scans for the next token in `state` by probing all terminals expected there,
     /// returning the highest-priority match. Returns an `$END` sentinel when no terminal matches,
     /// signaling end-of-input to the shift/reduce loop.
+    ///
+    /// The terminal list is pre-sorted at construction time so no allocation occurs here.
     fn get_lookahead(
         &self,
         tokenizer: &mut Tokenizer,
         state: usize,
     ) -> Result<Option<TokenMatch>, SwiftletError> {
-        let symbols = self.state_symbol.get(&state).unwrap();
-        let mut terminal_defs = symbols
-            .iter()
-            .filter_map(|symbol| tokenizer.get_terminal_def(symbol).cloned())
-            .collect::<Vec<_>>();
-        terminal_defs.sort_by(|a, b| {
-            b.priority
-                .cmp(&a.priority)
-                .then(b.max_width.cmp(&a.max_width))
-        });
+        let terminals = self.state_terminals.get(&state).unwrap();
+
         #[cfg(feature = "debug")]
         if self.parser_conf.debug {
             println!();
             println!("state: {}", state);
-            println!("symbols: {:?}", symbols);
             println!("terminal_def: ");
-            for td in terminal_defs.iter() {
-                println!("\t{:?}", td);
+            for sym in terminals {
+                if let Some(td) = tokenizer.get_terminal_def(sym) {
+                    println!("\t{:?}", td);
+                }
             }
         }
 
-        for terminal_def in terminal_defs {
-            let sym = terminal_def.get_name();
+        for sym in terminals {
             match tokenizer.peek_token_with_next_symbol(sym) {
-                Ok(lookahead) => {
-                    if let Some(lookahead) = lookahead {
-                        #[cfg(feature = "debug")]
-                        if self.parser_conf.debug {
-                            println!("lookahead: {:?}", lookahead);
-                        }
-                        tokenizer.commit_token_match(&lookahead);
-                        return Ok(Some(lookahead));
+                Ok(Some(lookahead)) => {
+                    #[cfg(feature = "debug")]
+                    if self.parser_conf.debug {
+                        println!("lookahead: {:?}", lookahead);
                     }
+                    tokenizer.commit_token_match(&lookahead);
+                    return Ok(Some(lookahead));
                 }
-                Err(err) => {
-                    return Err(err);
-                }
+                Ok(None) => {}
+                Err(err) => return Err(err),
             }
         }
 
@@ -641,7 +656,7 @@ pub(crate) fn closure(
     it_item: impl Iterator<Item = Arc<ClrItem>>,
 ) -> (ItemSet, SymbolSet) {
     let mut next_symbols: SymbolSet = IndexSet::new();
-    let mut items: ItemSet = HashSet::new();
+    let mut items: ItemSet = FxHashSet::default();
     let mut worklist = Vec::new();
 
     for item in it_item {
