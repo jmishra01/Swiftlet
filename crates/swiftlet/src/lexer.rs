@@ -419,12 +419,12 @@ impl Tokenizer {
     /// terminal is attempted, walking forward past leading ignored terminals. Mirrors the
     /// original per-call skip loop exactly, but is computed once and cached.
     fn skip_trajectory(&self) -> Vec<(usize, usize)> {
-        let mut traj = vec![];
+        let mut trajectory = vec![];
         let mut start = self.start;
         let mut line = self.line;
 
         while start < self.len {
-            traj.push((start, line));
+            trajectory.push((start, line));
 
             let slice_text = &self.text[start..self.len];
             let mut advanced = false;
@@ -443,7 +443,7 @@ impl Tokenizer {
                 break;
             }
         }
-        traj
+        trajectory
     }
 
 
@@ -470,8 +470,8 @@ impl Tokenizer {
     ) -> Option<TokenProbe> {
         let terminal = self.sym_terminal_def.get(next_symbols)?;
         if self.skip_cache.borrow().is_none() {
-            let traj = self.skip_trajectory();
-            *self.skip_cache.borrow_mut() = Some(traj);
+            let trajectory = self.skip_trajectory();
+            *self.skip_cache.borrow_mut() = Some(trajectory);
         }
 
         let cache = self.skip_cache.borrow();
